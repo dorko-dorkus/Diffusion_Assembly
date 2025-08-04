@@ -51,8 +51,12 @@ class Sampler:
             action = self.policy._actions[idx]
             if action == "STOP":
                 break
-            i, j, b = action
-            x.bonds[i, j] = x.bonds[j, i] = b
+            if isinstance(action, tuple) and action and action[0] == "ADD":
+                _, site, atom = action
+                x.add_atom(atom, site)
+            else:
+                i, j, b = action
+                x.bonds[i, j] = x.bonds[j, i] = b
         return x
 
     def trajectory(
@@ -83,7 +87,11 @@ class Sampler:
             action = self.policy._actions[idx]
             if action == "STOP":
                 break
-            i, j, b = action
-            x.bonds[i, j] = x.bonds[j, i] = b
+            if isinstance(action, tuple) and action and action[0] == "ADD":
+                _, site, atom = action
+                x.add_atom(atom, site)
+            else:
+                i, j, b = action
+                x.bonds[i, j] = x.bonds[j, i] = b
             traj.append(x.copy())
         return traj

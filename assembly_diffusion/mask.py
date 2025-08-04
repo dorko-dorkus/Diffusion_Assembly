@@ -1,7 +1,4 @@
-from .graph import MoleculeGraph, Chem
-
-
-VALENCE_CAP = {"C": 4, "N": 3, "O": 2, "H": 1}
+from .graph import MoleculeGraph, Chem, VALENCE_CAP, ALLOWED_ATOMS
 
 
 def valence_check(x: MoleculeGraph, i: int, j: int, b: int) -> bool:
@@ -29,13 +26,20 @@ def valence_check(x: MoleculeGraph, i: int, j: int, b: int) -> bool:
 
 
 class FeasibilityMask:
-    """Compute feasibility masks over possible bond edits."""
+    """Compute feasibility masks over possible edit actions."""
 
     def mask_edits(self, x: MoleculeGraph):
         mask = {}
+        # --- Bond edits -------------------------------------------------
         for i in range(len(x.atoms)):
             for j in range(i + 1, len(x.atoms)):
                 for b in [0, 1, 2, 3]:
                     mask[(i, j, b)] = 1 if valence_check(x, i, j, b) else 0
+
+        # --- Atom insertions -------------------------------------------
+        for i in x.free_valence_sites():
+            for atom in ALLOWED_ATOMS:
+                mask[("ADD", i, atom)] = 1
+
         mask["STOP"] = 1
         return mask

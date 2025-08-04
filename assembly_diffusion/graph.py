@@ -19,6 +19,14 @@ except ImportError:  # pragma: no cover - handled at runtime
     SanitizeMol = None
 
 
+# Basic valence caps used for fast feasibility checks.  These constants are
+# intentionally kept minimal and mirror those used in :mod:`mask` to avoid a
+# circular import.
+VALENCE_CAP = {"C": 4, "N": 3, "O": 2, "H": 1}
+# Allowed atom types for stochastic insertion moves.
+ALLOWED_ATOMS = list(VALENCE_CAP.keys())
+
+
 @dataclass
 class MoleculeGraph:
     """Simple molecular graph representation.
@@ -39,6 +47,36 @@ class MoleculeGraph:
         """Return a deep copy of the molecular graph."""
 
         return MoleculeGraph(self.atoms.copy(), self.bonds.clone())
+
+    # ------------------------------------------------------------------
+    # Utility helpers used by forward/reverse diffusion kernels
+
+    def degree(self, i: int) -> int:
+        """Return the current degree (total bond order) of atom ``i``."""
+
+        return int(self.bonds[i].sum().item())
+
+    def free_valence(self, i: int) -> int:
+        """Return remaining valence capacity for atom ``i``."""
+
+        cap = VALENCE_CAP.get(self.atoms[i], 4)
+        return cap - self.degree(i)
+
+    def free_valence_sites(self) -> List[int]:
+        """Return indices of atoms that can accept additional bonds."""
+
+        return [i for i in range(len(self.atoms)) if self.free_valence(i) > 0]
+
+    def add_atom(self, atom: str, attach_site: int, bond_order: int = 1):
+        """Attach a new ``atom`` to ``attach_site`` with ``bond_order``."""
+
+        n = len(self.atoms)
+        self.atoms.append(atom)
+        # Expand bond matrix with zeros and connect the new atom
+        new_bonds = torch.zeros((n + 1, n + 1), dtype=self.bonds.dtype)
+        new_bonds[:n, :n] = self.bonds
+        new_bonds[n, attach_site] = new_bonds[attach_site, n] = bond_order
+        self.bonds = new_bonds
 
     @staticmethod
     def from_rdkit(mol: "Chem.Mol") -> "MoleculeGraph":
