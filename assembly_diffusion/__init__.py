@@ -4,6 +4,7 @@ __all__ = [
     "graph",
     "mask",
     "forward",
+    "schedule",
     "backbone",
     "policy",
     "sampler",
