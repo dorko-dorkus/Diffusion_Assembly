@@ -60,33 +60,83 @@ class GNNBackbone(nn.Module):
         edge_input_dim = node_dim * 2 + 4  # two nodes + bond order one-hot
         self.edge_mlp = nn.Linear(edge_input_dim, edge_dim)
 
-    def forward(self, x: MoleculeGraph, t: int):
-        n = len(x.atoms)
+    def forward(self, x, t):
+        """Encode a :class:`MoleculeGraph` or a batch of graphs.
 
-        # --- Node features -------------------------------------------------
-        atom_ids = torch.tensor([ATOM_MAP.get(a, 0) for a in x.atoms])
-        atom_feat = F.one_hot(atom_ids, num_classes=len(ATOM_TYPES)).float()
+        Parameters
+        ----------
+        x:
+            Either a single :class:`MoleculeGraph` instance or a tuple
+            ``(atoms, bonds)`` where ``atoms`` is an ``(B, N)`` tensor of atom
+            type indices and ``bonds`` is an ``(B, N, N)`` tensor containing
+            bond orders.  Padding with zeros is assumed for sizes smaller than
+            ``N``.
+        t:
+            Diffusion step as integer or an ``(B,)`` tensor for batched input.
+        """
 
-        degree = (x.bonds > 0).sum(dim=1).clamp(max=4)
+        if isinstance(x, MoleculeGraph):
+            n = len(x.atoms)
+
+            # --- Node features ---------------------------------------------
+            atom_ids = torch.tensor([ATOM_MAP.get(a, 0) for a in x.atoms])
+            atom_feat = F.one_hot(atom_ids, num_classes=len(ATOM_TYPES)).float()
+
+            degree = (x.bonds > 0).sum(dim=1).clamp(max=4)
+            deg_feat = F.one_hot(degree, num_classes=5).float()
+
+            node_feat = torch.cat([atom_feat, deg_feat], dim=-1)
+            h = self.node_encoder(node_feat)
+
+            # --- Time embedding -------------------------------------------
+            t_emb = time_embedding(t, self.node_dim).to(h.device)
+
+            # --- Message passing ------------------------------------------
+            adj = x.bonds.float()
+            h = self.conv1(h + t_emb, adj)
+            h = F.relu(h)
+            h = self.conv2(h + t_emb, adj)
+            h_nodes = h
+
+            # --- Edge features --------------------------------------------
+            bond_feat = F.one_hot(
+                x.bonds.clamp(min=0, max=3).long(), num_classes=4
+            ).float()
+            hi = h.unsqueeze(1).expand(-1, n, -1)
+            hj = h.unsqueeze(0).expand(n, -1, -1)
+            edge_input = torch.cat([hi, hj, bond_feat], dim=-1)
+            h_edges = self.edge_mlp(edge_input)
+
+            return h_nodes, h_edges
+
+        # --- Batched input -------------------------------------------------
+        atoms, bonds = x  # (B, N) and (B, N, N)
+        batch, n = atoms.shape
+
+        atom_feat = F.one_hot(atoms, num_classes=len(ATOM_TYPES)).float()
+        degree = (bonds > 0).sum(dim=2).clamp(max=4)
         deg_feat = F.one_hot(degree, num_classes=5).float()
 
         node_feat = torch.cat([atom_feat, deg_feat], dim=-1)
         h = self.node_encoder(node_feat)
 
-        # --- Time embedding ------------------------------------------------
-        t_emb = time_embedding(t, self.node_dim).to(h.device)
+        if isinstance(t, int):
+            t = torch.full((batch,), t, device=h.device)
+        t_emb = torch.stack(
+            [time_embedding(int(ti), self.node_dim).to(h.device) for ti in t], dim=0
+        )
 
-        # --- Message passing -----------------------------------------------
-        adj = x.bonds.float()
-        h = self.conv1(h + t_emb, adj)
+        adj = bonds.float()
+        h = self.conv1(h + t_emb.unsqueeze(1), adj)
         h = F.relu(h)
-        h = self.conv2(h + t_emb, adj)
+        h = self.conv2(h + t_emb.unsqueeze(1), adj)
         h_nodes = h
 
-        # --- Edge features -------------------------------------------------
-        bond_feat = F.one_hot(x.bonds.clamp(min=0, max=3).long(), num_classes=4).float()
-        hi = h.unsqueeze(1).expand(-1, n, -1)
-        hj = h.unsqueeze(0).expand(n, -1, -1)
+        bond_feat = F.one_hot(
+            bonds.clamp(min=0, max=3).long(), num_classes=4
+        ).float()
+        hi = h.unsqueeze(2).expand(-1, -1, n, -1)
+        hj = h.unsqueeze(1).expand(-1, n, -1, -1)
         edge_input = torch.cat([hi, hj, bond_feat], dim=-1)
         h_edges = self.edge_mlp(edge_input)
 
