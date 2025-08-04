@@ -12,4 +12,5 @@ __all__ = [
     "data",
     "train",
     "edit_vocab",
+    "ai_surrogate",
 ]
