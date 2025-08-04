@@ -23,12 +23,32 @@ class ReversePolicy(nn.Module):
     def logits(self, x: MoleculeGraph, t: int, mask):
         """Compute logits for all possible edits including STOP.
 
-        ``mask`` is a dictionary mapping edit tuples ``(i, j, b)`` or the
-        string ``"STOP"`` to ``0/1`` feasibility flags.  Infeasible edits are
-        assigned ``-inf`` logit scores so they are never sampled.
+        Parameters
+        ----------
+        x:
+            Input molecular graph. When ``x`` represents a batch of graphs the
+            backbone is expected to return node features with shape
+            ``(B, N, D)`` and edge features with shape ``(B, N, N, E)``.  For a
+            single graph the shapes reduce to ``(N, D)`` and ``(N, N, E)``.
+        t:
+            Diffusion time step.
+        mask:
+            Dictionary mapping edit tuples ``(i, j, b)`` or the string
+            ``"STOP"`` to feasibility flags.  In the batched case the flags
+            should be tensors of shape ``(B,)``.  Infeasible edits are assigned
+            ``-inf`` logit scores so they are never sampled.
         """
 
         h_nodes, h_edges = self.backbone(x, t)
+
+        # Normalize shapes so that ``h_nodes`` has shape ``(B, N, D)`` and
+        # ``h_edges`` has shape ``(B, N, N, E)`` regardless of whether ``x``
+        # represents a single molecule or a batch.
+        batched = h_nodes.dim() == 3
+        if not batched:
+            h_nodes = h_nodes.unsqueeze(0)
+            h_edges = h_edges.unsqueeze(0)
+        B, N, _ = h_nodes.shape
 
         scores = []
         actions = []
@@ -36,21 +56,31 @@ class ReversePolicy(nn.Module):
             if key == "STOP":
                 continue
             i, j, b = key
-            feat = torch.cat([h_nodes[i], h_nodes[j], h_edges[i, j]], dim=-1)
-            logit = self.edit_head(feat)[b]
-            if not feasible:
-                logit = torch.tensor(-torch.inf, device=logit.device)
+            feat = torch.cat(
+                [h_nodes[:, i], h_nodes[:, j], h_edges[:, i, j]], dim=-1
+            )
+            logit = self.edit_head(feat)[:, b]
+            feas = torch.as_tensor(feasible, device=logit.device)
+            if feas.ndim == 0:
+                feas = feas.expand(B)
+            logit = torch.where(feas.bool(), logit, torch.full_like(logit, -torch.inf))
             scores.append(logit)
             actions.append(key)
 
-        stop_score = self.stop_head(h_nodes.mean(dim=0)).squeeze()
-        if not mask.get("STOP", 1):
-            stop_score = torch.tensor(-torch.inf, device=stop_score.device)
+        stop_score = self.stop_head(h_nodes.mean(dim=1)).squeeze(-1)
+        stop_feas = mask.get("STOP", torch.ones(B, device=stop_score.device))
+        stop_feas = torch.as_tensor(stop_feas, device=stop_score.device)
+        if stop_feas.ndim == 0:
+            stop_feas = stop_feas.expand(B)
+        stop_score = torch.where(
+            stop_feas.bool(), stop_score, torch.full_like(stop_score, -torch.inf)
+        )
         scores.append(stop_score)
         actions.append("STOP")
 
         self._actions = actions
-        return torch.stack(scores)
+        logits = torch.stack(scores, dim=1)
+        return logits[0] if not batched else logits
 
     def sample_edit(self, logits: torch.Tensor, temperature: float = 1.0):
         """Sample an edit index and its semantic meaning.
