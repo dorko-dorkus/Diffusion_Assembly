@@ -5,6 +5,7 @@ from .forward import ForwardKernel
 from .policy import ReversePolicy
 from .mask import FeasibilityMask
 from .graph import MoleculeGraph
+from .backbone import ATOM_TYPES
 
 
 def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
@@ -26,22 +27,31 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
                 mask: FeasibilityMask, optimizer, lambda_reg: float = 0.0):
     """Train ``policy`` for one epoch over ``loader``.
 
-    Each batch is processed element-wise: for every molecule ``G_0`` a timestep
-    ``t`` is sampled, the noisy graph ``G_t`` is generated, logits ``z`` are
-    computed and compared against the teacher edit ``y`` using cross-entropy
-    with optional entropy regularization.  Metrics are accumulated and model
+    The ``loader`` is expected to yield tuples ``(atom_tensor, bond_tensor)``
+    where each element contains a batch of atom identifiers and bond adjacency
+    matrices.  For every molecule ``G_0`` in the batch a timestep ``t`` is
+    sampled, the noisy graph ``G_t`` is generated, logits ``z`` are computed
+    and compared against the teacher edit ``y`` using cross-entropy with
+    optional entropy regularization.  Metrics are accumulated and model
     parameters are updated using the averaged batch loss.
     """
 
     policy.train()
     metrics = {"loss": 0.0, "accuracy": 0.0, "n": 0}
 
-    for batch in loader:
+    for atom_tensor, bond_tensor in loader:
         optimizer.zero_grad()
         device = next(policy.parameters()).device
         batch_loss = torch.tensor(0.0, device=device)
 
-        for x0 in batch:
+        for atoms, bonds in zip(atom_tensor, bond_tensor):
+            if isinstance(atoms, torch.Tensor):
+                atom_ids = [int(a) for a in atoms.tolist() if int(a) >= 0]
+                atom_list = [ATOM_TYPES[i] for i in atom_ids]
+            else:
+                atom_list = list(atoms)
+            x0 = MoleculeGraph(atom_list, bonds.to(device))
+
             t = random.randint(1, kernel.T)
             xt = kernel.sample_xt(x0, t)
             m = mask.mask_edits(xt)
@@ -61,7 +71,7 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
             metrics["loss"] += ce.item()
             metrics["n"] += 1
 
-        batch_loss = batch_loss / len(batch)
+        batch_loss = batch_loss / len(atom_tensor)
         batch_loss.backward()
         optimizer.step()
 
