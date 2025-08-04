@@ -42,3 +42,35 @@ def test_logits_batched_mask():
 
     # All logits for first batch element should be finite
     assert torch.isfinite(logits[0]).all()
+
+
+class DummyBackboneSingle(nn.Module):
+    def __init__(self, N=2, node_dim=8, edge_dim=4):
+        super().__init__()
+        self.node_dim = node_dim
+        self.edge_dim = edge_dim
+        self.h_nodes = torch.randn(N, node_dim)
+        self.h_edges = torch.randn(N, N, edge_dim)
+
+    def forward(self, x, t):  # pragma: no cover - x is ignored
+        return self.h_nodes, self.h_edges
+
+
+def test_logits_single_mask():
+    backbone = DummyBackboneSingle()
+    policy = ReversePolicy(backbone)
+
+    mask = {
+        (0, 1, 0): 1,
+        (0, 1, 1): 0,
+        "STOP": 1,
+    }
+
+    logits = policy.logits(None, 0, mask)
+    assert logits.shape == (len(policy._actions),)
+
+    idx_invalid = policy._actions.index((0, 1, 1))
+    assert logits[idx_invalid] == float("-inf")
+
+    idx_stop = policy._actions.index("STOP")
+    assert torch.isfinite(logits[idx_stop])
