@@ -1,6 +1,13 @@
-from rdkit import Chem
-from rdkit.Chem import SanitizeMol
+"""Utility functions for representing molecules as graphs."""
+
 import torch
+
+try:
+    from rdkit import Chem
+    from rdkit.Chem import SanitizeMol
+except ImportError:  # pragma: no cover - handled at runtime
+    Chem = None
+    SanitizeMol = None
 
 class MoleculeGraph:
     """Simple molecular graph representation."""
@@ -12,6 +19,18 @@ class MoleculeGraph:
         return MoleculeGraph(self.atoms.copy(), self.bonds.clone())
 
     def to_rdkit(self):
+        """Convert this graph to an RDKit molecule.
+
+        Raises
+        ------
+        ImportError
+            If RDKit is not installed.
+        """
+
+        if Chem is None:
+            raise ImportError(
+                "RDKit is required for converting MoleculeGraph to an RDKit Mol"
+            )
         mol = Chem.RWMol()
         atom_map = [mol.AddAtom(Chem.Atom(a)) for a in self.atoms]
         for i in range(len(self.atoms)):
@@ -23,6 +42,13 @@ class MoleculeGraph:
         return mol
 
     def is_valid(self):
+        """Return ``True`` if the molecule can be sanitized by RDKit.
+
+        If RDKit is not available the function returns ``False``.
+        """
+
+        if Chem is None or SanitizeMol is None:
+            return False
         try:
             mol = self.to_rdkit()
             SanitizeMol(mol)
@@ -31,4 +57,14 @@ class MoleculeGraph:
             return False
 
     def canonical_smiles(self):
+        """Return the canonical SMILES string using RDKit.
+
+        Raises
+        ------
+        ImportError
+            If RDKit is not installed.
+        """
+
+        if Chem is None:
+            raise ImportError("RDKit is required to generate canonical SMILES")
         return Chem.MolToSmiles(self.to_rdkit(), canonical=True)
