@@ -35,7 +35,7 @@ class FeasibilityMask:
         mask = {}
         for i in range(len(x.atoms)):
             for j in range(i + 1, len(x.atoms)):
-                for b in [0, 1, 2]:
+                for b in [0, 1, 2, 3]:
                     mask[(i, j, b)] = 1 if valence_check(x, i, j, b) else 0
         mask["STOP"] = 1
         return mask

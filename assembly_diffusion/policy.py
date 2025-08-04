@@ -13,8 +13,8 @@ class ReversePolicy(nn.Module):
     def __init__(self, backbone: GNNBackbone):
         super().__init__()
         self.backbone = backbone
-        # Head predicting scores for bond orders 0, 1 or 2
-        self.edit_head = nn.Linear(backbone.node_dim * 2 + backbone.edge_dim, 3)
+        # Head predicting scores for bond orders 0, 1, 2 or 3
+        self.edit_head = nn.Linear(backbone.node_dim * 2 + backbone.edge_dim, 4)
         # Separate head for the stop action
         self.stop_head = nn.Linear(backbone.node_dim, 1)
         # Stores mapping from logits to semantic edits for sampling
