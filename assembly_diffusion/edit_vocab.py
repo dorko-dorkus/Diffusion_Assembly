@@ -43,7 +43,7 @@ class EditVocab:
         """Enumerate all possible edits for ``x``.
 
         The edits are returned in a stable, deterministic order consisting of
-        all triples ``(i, j, b)`` with ``i < j`` and ``b`` in ``{0, 1, 2}``,
+        all triples ``(i, j, b)`` with ``i < j`` and ``b`` in ``{0, 1, 2, 3}``,
         followed by the ``STOP`` action.
         """
 
@@ -51,7 +51,7 @@ class EditVocab:
         edits: List[Edit] = []
         for i in range(n):
             for j in range(i + 1, n):
-                for b in [0, 1, 2]:
+                for b in [0, 1, 2, 3]:
                     edits.append(Edit(i, j, b))
         edits.append(EditVocab.STOP)
         return edits
