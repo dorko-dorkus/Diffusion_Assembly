@@ -8,6 +8,7 @@ __all__ = [
     "backbone",
     "policy",
     "sampler",
+    "guidance",
     "data",
     "train",
     "edit_vocab",
