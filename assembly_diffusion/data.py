@@ -4,6 +4,8 @@ import tarfile
 import urllib.request
 
 import torch
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
 from .graph import MoleculeGraph
@@ -120,17 +122,12 @@ class QM9CHON_Dataset(Dataset):
 def collate_graphs(batch):
     """Pack a list of :class:`MoleculeGraph` objects into padded tensors."""
 
-    max_atoms = max(len(m.atoms) for m in batch)
-    batch_size = len(batch)
+    atom_ids = [torch.tensor([ATOM_MAP.get(a, 0) for a in m.atoms], dtype=torch.long) for m in batch]
+    atom_tensor = pad_sequence(atom_ids, batch_first=True)
 
-    atom_tensor = torch.zeros((batch_size, max_atoms), dtype=torch.long)
-    bond_tensor = torch.zeros((batch_size, max_atoms, max_atoms), dtype=torch.float)
-
-    for i, mol in enumerate(batch):
-        n = len(mol.atoms)
-        atom_ids = torch.tensor([ATOM_MAP.get(a, 0) for a in mol.atoms])
-        atom_tensor[i, :n] = atom_ids
-        bond_tensor[i, :n, :n] = mol.bonds
+    max_atoms = atom_tensor.size(1)
+    bond_mats = [F.pad(m.bonds.float(), (0, max_atoms - m.bonds.size(-1), 0, 0)) for m in batch]
+    bond_tensor = pad_sequence(bond_mats, batch_first=True)
 
     return atom_tensor, bond_tensor
 
