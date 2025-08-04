@@ -9,4 +9,5 @@ __all__ = [
     "sampler",
     "data",
     "train",
+    "edit_vocab",
 ]
