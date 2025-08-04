@@ -4,6 +4,7 @@ from torch.distributions import Categorical
 from .mask import FeasibilityMask
 from .policy import ReversePolicy
 from .graph import MoleculeGraph
+from .guidance import reweight
 
 class Sampler:
     """Run reverse diffusion sampling using a policy and feasibility mask."""
@@ -11,7 +12,14 @@ class Sampler:
         self.policy = policy
         self.masker = mask
 
-    def sample(self, T: int, x_init: MoleculeGraph, guidance=None) -> MoleculeGraph:
+    def sample(
+        self,
+        T: int,
+        x_init: MoleculeGraph,
+        guidance=None,
+        gamma: float = 0.0,
+        clip_range: tuple[float, float] = (-float("inf"), float("inf")),
+    ) -> MoleculeGraph:
         """Generate a single sample by running ``T`` reverse steps.
 
         Parameters
@@ -21,8 +29,13 @@ class Sampler:
         x_init:
             Starting molecular graph at time ``T``.
         guidance: callable, optional
-            Function modifying the logits before sampling. It must accept
-            ``(logits, x, t, mask)`` and return adjusted logits.
+            Function producing guidance scores ``ΔS`` for candidate edits. It
+            must accept ``(logits, x, t, mask)`` and return a tensor aligned
+            with the non-STOP logits.
+        gamma: float, optional
+            Scale factor for the guidance scores.
+        clip_range: tuple of float, optional
+            Range ``(a, b)`` used to clip ``ΔS`` before scaling.
         """
 
         x = x_init.copy()
@@ -30,7 +43,8 @@ class Sampler:
             mask = self.masker.mask_edits(x)
             logits = self.policy.logits(x, t, mask)
             if guidance is not None:
-                logits = guidance(logits, x, t, mask)
+                delta = guidance(logits, x, t, mask)
+                logits = reweight(logits, x, delta, gamma, clip_range)
             probs = torch.softmax(logits, dim=0)
             dist = Categorical(probs)
             idx = dist.sample().item()
@@ -41,7 +55,14 @@ class Sampler:
             x.bonds[i, j] = x.bonds[j, i] = b
         return x
 
-    def trajectory(self, T: int, x_init: MoleculeGraph, guidance=None):
+    def trajectory(
+        self,
+        T: int,
+        x_init: MoleculeGraph,
+        guidance=None,
+        gamma: float = 0.0,
+        clip_range: tuple[float, float] = (-float("inf"), float("inf")),
+    ):
         """Return the sequence of intermediate graphs for diagnostics.
 
         The returned list starts from ``x_init`` (``G_T``) and includes each
@@ -54,7 +75,8 @@ class Sampler:
             mask = self.masker.mask_edits(x)
             logits = self.policy.logits(x, t, mask)
             if guidance is not None:
-                logits = guidance(logits, x, t, mask)
+                delta = guidance(logits, x, t, mask)
+                logits = reweight(logits, x, delta, gamma, clip_range)
             probs = torch.softmax(logits, dim=0)
             dist = Categorical(probs)
             idx = dist.sample().item()
