@@ -1,5 +1,6 @@
 from .graph import MoleculeGraph
 
+
 class FeasibilityMask:
     """Compute feasibility masks over possible bond edits."""
     def mask_edits(self, x: MoleculeGraph):

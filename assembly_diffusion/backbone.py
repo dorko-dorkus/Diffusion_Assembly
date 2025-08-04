@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from .graph import MoleculeGraph
 
+
 class GNNBackbone(nn.Module):
     """Minimal GNN backbone used by the reverse policy."""
     def __init__(self, node_dim: int = 16):

@@ -3,6 +3,7 @@ import random
 
 from .graph import MoleculeGraph
 
+
 class ForwardKernel:
     """Simple forward diffusion kernel that randomly removes bonds."""
     def __init__(self, beta0: float = 0.1, T: int = 10):
