@@ -3,9 +3,11 @@ import os
 import tarfile
 import urllib.request
 
+import torch
 from torch.utils.data import DataLoader, Dataset
 
 from .graph import MoleculeGraph
+from .backbone import ATOM_MAP
 
 URL = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/gdb9.tar.gz"
 QM9_SHA256 = "45255048ac6d83ea4b923ecdf7d6fb6dc62bfec5e80fbc5bcfd93a62157a31db"
@@ -115,8 +117,26 @@ class QM9CHON_Dataset(Dataset):
         return self.data[idx]
 
 
+def collate_graphs(batch):
+    """Pack a list of :class:`MoleculeGraph` objects into padded tensors."""
+
+    max_atoms = max(len(m.atoms) for m in batch)
+    batch_size = len(batch)
+
+    atom_tensor = torch.zeros((batch_size, max_atoms), dtype=torch.long)
+    bond_tensor = torch.zeros((batch_size, max_atoms, max_atoms), dtype=torch.float)
+
+    for i, mol in enumerate(batch):
+        n = len(mol.atoms)
+        atom_ids = torch.tensor([ATOM_MAP.get(a, 0) for a in mol.atoms])
+        atom_tensor[i, :n] = atom_ids
+        bond_tensor[i, :n, :n] = mol.bonds
+
+    return atom_tensor, bond_tensor
+
+
 def get_dataloader(batch_size: int = 32, max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR):
     """Return a dataloader over the filtered QM9 molecules."""
 
     dataset = QM9CHON_Dataset(max_heavy, data_dir)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=lambda x: x)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_graphs)
