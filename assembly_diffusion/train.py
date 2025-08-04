@@ -8,14 +8,18 @@ from .graph import MoleculeGraph
 
 
 def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
-    """Return the edit transforming ``xt`` toward ``x0`` or ``STOP`` if none."""
-    for i in range(len(x0.atoms)):
-        for j in range(i + 1, len(x0.atoms)):
+    """Return a random edit transforming ``xt`` toward ``x0`` or ``STOP`` if none."""
+    diff = []
+    n = len(x0.atoms)
+    for i in range(n):
+        for j in range(i + 1, n):
             b0 = int(x0.bonds[i, j])
             bt = int(xt.bonds[i, j])
             if b0 != bt:
-                return (i, j, b0)
-    return "STOP"
+                diff.append((i, j, b0))
+    if not diff:
+        return "STOP"
+    return random.choice(diff)
 
 
 def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
