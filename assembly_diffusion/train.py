@@ -1,3 +1,4 @@
+import os
 import random
 import torch
 
@@ -24,7 +25,8 @@ def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
 
 
 def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
-                mask: FeasibilityMask, optimizer, lambda_reg: float = 0.0):
+                mask: FeasibilityMask, optimizer, lambda_reg: float = 0.0,
+                *, epoch: int = 0, writer=None, ckpt_interval: int = 500):
     """Train ``policy`` for one epoch over ``loader``.
 
     The ``loader`` is expected to yield tuples ``(atom_tensor, bond_tensor)``
@@ -38,8 +40,12 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
 
     policy.train()
     metrics = {"loss": 0.0, "accuracy": 0.0, "n": 0}
+    global_step = epoch * len(loader)
 
-    for atom_tensor, bond_tensor in loader:
+    if ckpt_interval:
+        os.makedirs("checkpoints", exist_ok=True)
+
+    for i, (atom_tensor, bond_tensor) in enumerate(loader):
         optimizer.zero_grad()
         device = next(policy.parameters()).device
 
@@ -76,6 +82,16 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
         batch_loss = ce.mean()
         batch_loss.backward()
         optimizer.step()
+
+        if writer is not None:
+            writer.add_scalar("loss/train", batch_loss.item(), global_step + i)
+
+        if ckpt_interval and (global_step + i) % ckpt_interval == 0:
+            path = f"checkpoints/epoch{epoch}_step{global_step + i}.pt"
+            torch.save({
+                "policy": policy.state_dict(),
+                "optimizer": optimizer.state_dict(),
+            }, path)
 
         preds = probs.argmax(dim=1)
         metrics["accuracy"] += (preds == y).sum().item()
