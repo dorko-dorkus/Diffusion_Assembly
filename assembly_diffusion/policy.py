@@ -50,36 +50,52 @@ class ReversePolicy(nn.Module):
             h_edges = h_edges.unsqueeze(0)
         B, N, _ = h_nodes.shape
 
-        scores = []
-        actions = []
-        for key, feasible in mask.items():
-            if key == "STOP":
-                continue
-            i, j, b = key
-            feat = torch.cat(
-                [h_nodes[:, i], h_nodes[:, j], h_edges[:, i, j]], dim=-1
+        device = h_nodes.device
+
+        # Collect edit indices and feasibility flags
+        edit_keys = [key for key in mask.keys() if key != "STOP"]
+        actions = edit_keys + ["STOP"]
+
+        if edit_keys:
+            i_idx = torch.tensor([k[0] for k in edit_keys], device=device, dtype=torch.long)
+            j_idx = torch.tensor([k[1] for k in edit_keys], device=device, dtype=torch.long)
+            b_idx = torch.tensor([k[2] for k in edit_keys], device=device, dtype=torch.long)
+
+            # Extract features for all candidate edits using advanced indexing
+            node_i = h_nodes[:, i_idx]
+            node_j = h_nodes[:, j_idx]
+            edge_ij = h_edges[:, i_idx, j_idx]
+            feat = torch.cat([node_i, node_j, edge_ij], dim=-1)
+
+            edit_logits = self.edit_head(feat)
+            edit_logits = edit_logits.gather(
+                -1, b_idx.view(1, -1, 1).expand(B, -1, 1)
+            ).squeeze(-1)
+
+            feas_list = []
+            for key in edit_keys:
+                feas = torch.as_tensor(mask[key], device=device)
+                if feas.ndim == 0:
+                    feas = feas.expand(B)
+                feas_list.append(feas)
+            feas_tensor = torch.stack(feas_list, dim=1)
+            edit_logits = torch.where(
+                feas_tensor.bool(), edit_logits, torch.full_like(edit_logits, -torch.inf)
             )
-            logit = self.edit_head(feat)[:, b]
-            feas = torch.as_tensor(feasible, device=logit.device)
-            if feas.ndim == 0:
-                feas = feas.expand(B)
-            logit = torch.where(feas.bool(), logit, torch.full_like(logit, -torch.inf))
-            scores.append(logit)
-            actions.append(key)
+        else:
+            edit_logits = torch.empty(B, 0, device=device)
 
         stop_score = self.stop_head(h_nodes.mean(dim=1)).squeeze(-1)
-        stop_feas = mask.get("STOP", torch.ones(B, device=stop_score.device))
-        stop_feas = torch.as_tensor(stop_feas, device=stop_score.device)
+        stop_feas = mask.get("STOP", torch.ones(B, device=device))
+        stop_feas = torch.as_tensor(stop_feas, device=device)
         if stop_feas.ndim == 0:
             stop_feas = stop_feas.expand(B)
         stop_score = torch.where(
             stop_feas.bool(), stop_score, torch.full_like(stop_score, -torch.inf)
         )
-        scores.append(stop_score)
-        actions.append("STOP")
 
+        logits = torch.cat([edit_logits, stop_score.unsqueeze(1)], dim=1)
         self._actions = actions
-        logits = torch.stack(scores, dim=1)
         return logits[0] if not batched else logits
 
     def sample_edit(self, logits: torch.Tensor, temperature: float = 1.0):
