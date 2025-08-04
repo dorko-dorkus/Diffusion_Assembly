@@ -42,38 +42,45 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
     for atom_tensor, bond_tensor in loader:
         optimizer.zero_grad()
         device = next(policy.parameters()).device
-        batch_loss = torch.tensor(0.0, device=device)
 
-        for atoms, bonds in zip(atom_tensor, bond_tensor):
+        # --- Construct batched MoleculeGraph ------------------------------
+        atom_lists = []
+        for atoms in atom_tensor:
             if isinstance(atoms, torch.Tensor):
                 atom_ids = [int(a) for a in atoms.tolist() if int(a) >= 0]
-                atom_list = [ATOM_TYPES[i] for i in atom_ids]
+                atom_lists.append([ATOM_TYPES[i] for i in atom_ids])
             else:
-                atom_list = list(atoms)
-            x0 = MoleculeGraph(atom_list, bonds.to(device))
+                atom_lists.append(list(atoms))
+        x0 = MoleculeGraph(atom_lists, bond_tensor.to(device))
 
-            t = random.randint(1, kernel.T)
-            xt = kernel.sample_xt(x0, t)
-            m = mask.mask_edits(xt)
-            target_edit = teacher_edit(x0, xt)
-            logits = policy.logits(xt, t, m)
-            y = policy._actions.index(target_edit)
+        B = len(atom_lists)
+        t = torch.randint(1, kernel.T + 1, (B,), device=device)
+        xt = kernel.sample_xt(x0, t)
+        m = mask.mask_edits(xt)
+        logits = policy.logits(xt, t, m)
 
-            probs = torch.softmax(logits, dim=0)
-            ce = -torch.log(probs[y] + 1e-12)
-            if lambda_reg > 0:
-                entropy = -(probs * torch.log(probs + 1e-12)).sum()
-                ce = ce - lambda_reg * entropy
+        # --- Compute teacher edits and targets ----------------------------
+        x0_graphs = [MoleculeGraph(atom_lists[i], x0.bonds[i]) for i in range(B)]
+        xt_graphs = [MoleculeGraph(atom_lists[i], xt.bonds[i]) for i in range(B)]
+        targets = [policy._actions.index(teacher_edit(g0, gt))
+                   for g0, gt in zip(x0_graphs, xt_graphs)]
+        y = torch.tensor(targets, device=device)
 
-            batch_loss = batch_loss + ce
-            pred = probs.argmax().item()
-            metrics["accuracy"] += 1 if pred == y else 0
-            metrics["loss"] += ce.item()
-            metrics["n"] += 1
+        # --- Loss and metrics ---------------------------------------------
+        probs = torch.softmax(logits, dim=1)
+        ce = -torch.log(probs[torch.arange(B, device=device), y] + 1e-12)
+        if lambda_reg > 0:
+            entropy = -(probs * torch.log(probs + 1e-12)).sum(dim=1)
+            ce = ce - lambda_reg * entropy
 
-        batch_loss = batch_loss / len(atom_tensor)
+        batch_loss = ce.mean()
         batch_loss.backward()
         optimizer.step()
+
+        preds = probs.argmax(dim=1)
+        metrics["accuracy"] += (preds == y).sum().item()
+        metrics["loss"] += ce.sum().item()
+        metrics["n"] += B
 
     metrics["loss"] /= metrics["n"]
     metrics["accuracy"] /= metrics["n"]
