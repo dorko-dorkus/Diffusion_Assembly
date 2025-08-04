@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from typing import Iterable, Tuple, Union
+
+import torch
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 from .graph import MoleculeGraph
 
@@ -33,12 +37,20 @@ class NoiseSchedule:
 
     def calibrate(
         self,
-        graph_batch: Iterable[MoleculeGraph],
+        graph_batch: Union[
+            Iterable[MoleculeGraph],
+            torch.Tensor,
+            Tuple[torch.Tensor, torch.Tensor],
+        ],
         rho_target: float,
         epsilon: float = 1e-3,
         max_steps: int = 100,
     ) -> float:
         """Tune ``beta0`` to match a desired masked bond fraction.
+
+        The function accepts either an iterable of :class:`MoleculeGraph`
+        instances or pre-collated tensors as produced by
+        :func:`assembly_diffusion.data.collate_graphs`.
 
         The expected fraction of masked bonds after ``T`` steps is
 
@@ -51,7 +63,8 @@ class NoiseSchedule:
         Parameters
         ----------
         graph_batch:
-            Iterable of :class:`MoleculeGraph` instances.
+            Iterable of :class:`MoleculeGraph` objects or collated tensors
+            ``(atom_tensor, bond_tensor)`` or just ``bond_tensor``.
         rho_target:
             Desired fraction of bonds that are masked at ``t = T``.
         epsilon:
@@ -65,13 +78,33 @@ class NoiseSchedule:
             The calibrated ``beta0`` value.
         """
 
-        total_bonds = 0.0
-        total_pairs = 0.0
-        for g in graph_batch:
-            n = len(g.atoms)
-            total_pairs += n * (n - 1) / 2
-            # Count unique bonds (upper triangular part of adjacency)
-            total_bonds += float((g.bonds.triu(1) > 0).sum().item())
+        # --- Prepare bond tensor -----------------------------------------
+        if isinstance(graph_batch, torch.Tensor):
+            bond_tensor = graph_batch.float()
+        elif (
+            isinstance(graph_batch, (tuple, list))
+            and len(graph_batch) >= 2
+            and isinstance(graph_batch[1], torch.Tensor)
+        ):
+            bond_tensor = graph_batch[1].float()
+        else:
+            bond_mats = [g.bonds.float() for g in graph_batch]
+            if not bond_mats:
+                raise ValueError("Graph batch is empty")
+            max_atoms = max(b.size(0) for b in bond_mats)
+            padded = [
+                F.pad(b, (0, max_atoms - b.size(-1), 0, max_atoms - b.size(-2)))
+                for b in bond_mats
+            ]
+            bond_tensor = pad_sequence(padded, batch_first=True)
+
+        # --- Compute statistics via vectorised tensor ops -----------------
+        triu = torch.triu(bond_tensor, diagonal=1)
+        total_bonds = (triu > 0).sum().item()
+
+        atom_mask = bond_tensor.abs().sum(dim=-1) > 0
+        n_atoms = atom_mask.sum(dim=1).float()
+        total_pairs = (n_atoms * (n_atoms - 1) / 2).sum().item()
 
         if total_pairs == 0:
             raise ValueError("Graph batch contains no atom pairs")
@@ -79,7 +112,7 @@ class NoiseSchedule:
         F = total_bonds / total_pairs
         if rho_target >= F:
             raise ValueError(
-                "Target masked fraction exceeds maximum achievable for batch"
+                "Target masked fraction exceeds maximum achievable for batch",
             )
 
         def expected_fraction(beta: float) -> float:
