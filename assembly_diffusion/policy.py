@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 
 from .backbone import GNNBackbone
-from .graph import MoleculeGraph
+from .graph import MoleculeGraph, ALLOWED_ATOMS
 
 
 class ReversePolicy(nn.Module):
@@ -15,6 +15,9 @@ class ReversePolicy(nn.Module):
         self.backbone = backbone
         # Head predicting scores for bond orders 0, 1, 2 or 3
         self.edit_head = nn.Linear(backbone.node_dim * 2 + backbone.edge_dim, 4)
+        # Head for atom insertion actions (site + atom type)
+        self.atom_embed = nn.Embedding(len(ALLOWED_ATOMS), backbone.node_dim)
+        self.insert_head = nn.Linear(backbone.node_dim * 2, 1)
         # Separate head for the stop action
         self.stop_head = nn.Linear(backbone.node_dim, 1)
         # Stores mapping from logits to semantic edits for sampling
@@ -53,15 +56,16 @@ class ReversePolicy(nn.Module):
         device = h_nodes.device
 
         # Collect edit indices and feasibility flags
-        edit_keys = [key for key in mask.keys() if key != "STOP"]
-        actions = edit_keys + ["STOP"]
+        edit_keys = [key for key in mask.keys() if isinstance(key, tuple) and key and key[0] != "ADD"]
+        insert_keys = [key for key in mask.keys() if isinstance(key, tuple) and key and key[0] == "ADD"]
+        actions = edit_keys + insert_keys + ["STOP"]
 
         if edit_keys:
             i_idx = torch.tensor([k[0] for k in edit_keys], device=device, dtype=torch.long)
             j_idx = torch.tensor([k[1] for k in edit_keys], device=device, dtype=torch.long)
             b_idx = torch.tensor([k[2] for k in edit_keys], device=device, dtype=torch.long)
 
-            # Extract features for all candidate edits using advanced indexing
+            # Extract features for all candidate bond edits using advanced indexing
             node_i = h_nodes[:, i_idx]
             node_j = h_nodes[:, j_idx]
             edge_ij = h_edges[:, i_idx, j_idx]
@@ -85,6 +89,28 @@ class ReversePolicy(nn.Module):
         else:
             edit_logits = torch.empty(B, 0, device=device)
 
+        if insert_keys:
+            site_idx = torch.tensor([k[1] for k in insert_keys], device=device, dtype=torch.long)
+            atom_idx = torch.tensor([ALLOWED_ATOMS.index(k[2]) for k in insert_keys], device=device, dtype=torch.long)
+            node_site = h_nodes[:, site_idx]
+            atom_feat = self.atom_embed(atom_idx)
+            atom_feat = atom_feat.unsqueeze(0).expand(B, -1, -1)
+            feat = torch.cat([node_site, atom_feat], dim=-1)
+            insert_logits = self.insert_head(feat).squeeze(-1)
+
+            feas_list = []
+            for key in insert_keys:
+                feas = torch.as_tensor(mask[key], device=device)
+                if feas.ndim == 0:
+                    feas = feas.expand(B)
+                feas_list.append(feas)
+            feas_tensor = torch.stack(feas_list, dim=1)
+            insert_logits = torch.where(
+                feas_tensor.bool(), insert_logits, torch.full_like(insert_logits, -torch.inf)
+            )
+        else:
+            insert_logits = torch.empty(B, 0, device=device)
+
         stop_score = self.stop_head(h_nodes.mean(dim=1)).squeeze(-1)
         stop_feas = mask.get("STOP", torch.ones(B, device=device))
         stop_feas = torch.as_tensor(stop_feas, device=device)
@@ -94,7 +120,7 @@ class ReversePolicy(nn.Module):
             stop_feas.bool(), stop_score, torch.full_like(stop_score, -torch.inf)
         )
 
-        logits = torch.cat([edit_logits, stop_score.unsqueeze(1)], dim=1)
+        logits = torch.cat([edit_logits, insert_logits, stop_score.unsqueeze(1)], dim=1)
         self._actions = actions
         return logits[0] if not batched else logits
 
