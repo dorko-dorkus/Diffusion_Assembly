@@ -4,6 +4,7 @@ import torch.nn as nn
 from .backbone import GNNBackbone
 from .graph import MoleculeGraph
 
+
 class ReversePolicy(nn.Module):
     """Reverse diffusion policy producing edit logits."""
     def __init__(self, backbone: GNNBackbone):
