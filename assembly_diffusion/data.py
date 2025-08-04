@@ -24,8 +24,13 @@ def download_qm9():
 
 def load_qm9_chon(max_heavy: int = 12):
     """Load molecules from the QM9 dataset restricted to C/H/O/N."""
-    from rdkit.Chem import rdmolfiles
     import torch
+    try:
+        from rdkit.Chem import rdmolfiles
+    except ImportError as e:  # pragma: no cover - runtime check
+        raise ImportError(
+            "RDKit is required to load QM9 data. Install it, e.g., via 'conda install -c conda-forge rdkit'."
+        ) from e
 
     if not os.path.exists("qm9_raw/gdb9.sdf"):
         download_qm9()
