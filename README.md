@@ -4,12 +4,32 @@ Prototype package for molecular assembly diffusion.
 
 ## Installation
 
-Create and activate a virtual environment, then install the package requirements:
+The project targets Python 3.10+ and is distributed as a standard Python package.
+To get started locally:
 
-```bash
-pip install torch
-pip install -e .
-```
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/username/Diffusion_Assembly.git
+   cd Diffusion_Assembly
+   ```
+
+2. **Create and activate a virtual environment**
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. **Install the dependencies**
+
+   Install PyTorch first (choose the variant appropriate for your hardware),
+   then install the package itself in editable mode:
+
+   ```bash
+   pip install torch
+   pip install -e .
+   ```
 
 ### RDKit
 
@@ -28,6 +48,20 @@ The QM9 dataset is downloaded on demand. By default files are stored in a
 `QM9_DATA_DIR` environment variable. Downloads are verified against a
 SHA-256 checksum and corrupted archives trigger a clear error so they can be
 re-downloaded.
+
+## Usage
+
+Once installed, the package exposes a small command line interface that can
+perform a minimal molecule sampling demo. From the project root run:
+
+```bash
+python -m assembly_diffusion sample
+```
+
+The command constructs a simple molecular graph, runs the diffusion sampler and
+prints a canonical SMILES string of the generated molecule. Additional utilities
+for training and evaluation are available in the `assembly_diffusion` module and
+can serve as starting points for custom experiments.
 
 ## Testing
 
