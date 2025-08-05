@@ -13,11 +13,13 @@ def sample_demo():
         from .sampler import Sampler
     except ModuleNotFoundError as exc:
         raise SystemExit(f"Missing dependency: {exc.name}")
-
-    x_init = MoleculeGraph(['C', 'O'], torch.zeros((2, 2)))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    x_init = MoleculeGraph(
+        ['C', 'O'], torch.zeros((2, 2), dtype=torch.int64, device=device)
+    )
     kernel = ForwardKernel()
     mask = FeasibilityMask()
-    policy = ReversePolicy(GNNBackbone())
+    policy = ReversePolicy(GNNBackbone()).to(device)
     sampler = Sampler(policy, mask)
     x = sampler.sample(kernel.T, x_init)
     print(x.canonical_smiles())

@@ -10,6 +10,8 @@ from assembly_diffusion.policy import ReversePolicy
 from assembly_diffusion.sampler import Sampler
 from assembly_diffusion.guidance import AssemblyPrior
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def main():
     """Generate samples and save them to ``sample.parquet``.
@@ -21,10 +23,12 @@ def main():
 
     torch.manual_seed(0)
 
-    x_init = MoleculeGraph(["C", "O"], torch.zeros((2, 2), dtype=torch.int64))
+    x_init = MoleculeGraph(
+        ["C", "O"], torch.zeros((2, 2), dtype=torch.int64, device=DEVICE)
+    )
     kernel = ForwardKernel()
     mask = FeasibilityMask()
-    policy = ReversePolicy(GNNBackbone())
+    policy = ReversePolicy(GNNBackbone()).to(DEVICE)
     sampler = Sampler(policy, mask)
 
     prior = AssemblyPrior(coeff=0.5, target=12)

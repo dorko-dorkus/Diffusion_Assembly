@@ -23,6 +23,9 @@ from pathlib import Path
 import yaml
 import torch
 
+# Use GPU when available
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Ensure the repository root is on the Python path so we can import the local
 # modules when the script is executed as ``python scripts/experiment.py``.
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +79,7 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
             loader = get_dataloader(batch_size=cfg.batch, max_heavy=cfg.max_atoms)
             kernel = ForwardKernel()
             mask = FeasibilityMask()
-            policy = ReversePolicy(GNNBackbone(node_dim=cfg.hidden_dim))
+            policy = ReversePolicy(GNNBackbone(node_dim=cfg.hidden_dim)).to(DEVICE)
             opt_cls = {
                 "adamw": torch.optim.AdamW,
                 "sgd": torch.optim.SGD,
@@ -110,10 +113,12 @@ def run_sampling() -> None:
 
     logger.info("[Sampling] Drawing one molecule …")
     torch.manual_seed(0)
-    x_init = MoleculeGraph(["C", "O"], torch.zeros((2, 2), dtype=torch.int64))
+    x_init = MoleculeGraph(
+        ["C", "O"], torch.zeros((2, 2), dtype=torch.int64, device=DEVICE)
+    )
     kernel = ForwardKernel()
     mask = FeasibilityMask()
-    policy = ReversePolicy(GNNBackbone())
+    policy = ReversePolicy(GNNBackbone()).to(DEVICE)
     sampler = Sampler(policy, mask)
     x = sampler.sample(kernel.T, x_init, gamma=1.0)
     try:

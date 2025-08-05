@@ -64,7 +64,9 @@ class GNNBackbone(nn.Module):
         n = len(x.atoms)
 
         # --- Node features -------------------------------------------------
-        atom_ids = torch.tensor([ATOM_MAP.get(a, 0) for a in x.atoms])
+        atom_ids = torch.tensor(
+            [ATOM_MAP.get(a, 0) for a in x.atoms], device=x.bonds.device
+        )
         atom_feat = F.one_hot(atom_ids, num_classes=len(ATOM_TYPES)).float()
 
         degree = (x.bonds > 0).sum(dim=1).clamp(max=4)
