@@ -13,5 +13,6 @@ __all__ = [
     "train",
     "edit_vocab",
     "ai_surrogate",
+    "ai_mc",
     "assembly_index",
 ]
