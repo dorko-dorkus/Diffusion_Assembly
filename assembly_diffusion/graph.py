@@ -73,7 +73,9 @@ class MoleculeGraph:
         n = len(self.atoms)
         self.atoms.append(atom)
         # Expand bond matrix with zeros and connect the new atom
-        new_bonds = torch.zeros((n + 1, n + 1), dtype=self.bonds.dtype)
+        new_bonds = torch.zeros(
+            (n + 1, n + 1), dtype=self.bonds.dtype, device=self.bonds.device
+        )
         new_bonds[:n, :n] = self.bonds
         new_bonds[n, attach_site] = new_bonds[attach_site, n] = bond_order
         self.bonds = new_bonds
