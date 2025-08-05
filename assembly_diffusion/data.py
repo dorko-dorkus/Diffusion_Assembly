@@ -141,4 +141,11 @@ def get_dataloader(batch_size: int = 32, max_heavy: int = 12, data_dir: str = DE
     """Return a dataloader over the filtered QM9 molecules."""
 
     dataset = QM9CHON_Dataset(max_heavy, data_dir)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_graphs)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=collate_graphs,
+        pin_memory=torch.cuda.is_available(),
+        num_workers=min(4, os.cpu_count() or 0),
+    )

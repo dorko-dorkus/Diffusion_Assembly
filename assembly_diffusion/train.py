@@ -45,13 +45,14 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
     policy.train()
     metrics = {"loss": 0.0, "accuracy": 0.0, "n": 0}
     global_step = epoch * len(loader)
+    device = next(policy.parameters()).device
 
     if ckpt_interval:
         os.makedirs("checkpoints", exist_ok=True)
 
     for i, (atom_tensor, bond_tensor) in enumerate(loader):
         optimizer.zero_grad()
-        device = next(policy.parameters()).device
+        bond_tensor = bond_tensor.to(device, non_blocking=True)
 
         # --- Construct batched MoleculeGraph ------------------------------
         atom_lists = []
@@ -61,7 +62,7 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
                 atom_lists.append([ATOM_TYPES[i] for i in atom_ids])
             else:
                 atom_lists.append(list(atoms))
-        x0 = MoleculeGraph(atom_lists, bond_tensor.to(device))
+        x0 = MoleculeGraph(atom_lists, bond_tensor)
 
         B = len(atom_lists)
         t = torch.randint(1, kernel.T + 1, (B,), device=device)
