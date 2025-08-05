@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, get_type_hints
 
 import yaml
 
@@ -44,5 +44,16 @@ def load_config(path: str | Path, variant: str) -> TrainConfig:
     missing = [k for k in TrainConfig.__annotations__ if k not in merged]
     if missing:
         raise KeyError(f"Missing keys in configuration: {missing}")
+
+    # ``yaml.safe_load`` returns plain scalars as strings in some cases
+    # (e.g. ``3e-4``).  Cast the merged configuration values to the types
+    # expected by :class:`TrainConfig` to avoid type errors downstream.
+    hints = get_type_hints(TrainConfig)
+    for key, typ in hints.items():
+        if key in merged:
+            try:
+                merged[key] = typ(merged[key])
+            except (TypeError, ValueError) as exc:
+                raise TypeError(f"Invalid value for '{key}': {merged[key]}") from exc
 
     return TrainConfig(**merged)
