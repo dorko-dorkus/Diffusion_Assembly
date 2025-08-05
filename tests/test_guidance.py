@@ -1,7 +1,10 @@
 import pathlib
 import sys
 
-import torch
+import pytest
+
+# Import torch lazily so the test suite can run without the dependency.
+torch = pytest.importorskip("torch")
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from assembly_diffusion.guidance import AssemblyPrior

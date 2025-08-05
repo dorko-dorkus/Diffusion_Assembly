@@ -1,7 +1,11 @@
 import pathlib
 import sys
 
-import torch
+import pytest
+
+# Import torch lazily to allow the remaining tests to run when the
+# dependency is unavailable.
+torch = pytest.importorskip("torch")
 import torch.nn as nn
 
 # Ensure repository root on path for direct import
