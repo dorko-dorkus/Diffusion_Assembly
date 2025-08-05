@@ -1,0 +1,18 @@
+common:
+  dataset: qm9_chon
+  max_atoms: 12
+  hidden_dim: 128
+  optimiser: adamw
+  lr: 3e-4
+  batch: 256
+  epochs: 300
+  schedule: cosine
+unguided:
+  guid_coeff: 0.0
+  guid_mode: none
+ai_guided:
+  guid_coeff: 0.5
+  guid_mode: exact_ai
+random_energy:
+  guid_coeff: 0.5
+  guid_mode: permuted
