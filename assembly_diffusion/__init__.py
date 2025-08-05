@@ -11,6 +11,7 @@ __all__ = [
     "guidance",
     "data",
     "train",
+    "config",
     "edit_vocab",
     "ai_surrogate",
     "ai_mc",
