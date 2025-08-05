@@ -1,3 +1,4 @@
 torch
+pyyaml
 # RDKit is optional and often easier to install via conda:
 # conda install -c conda-forge rdkit
