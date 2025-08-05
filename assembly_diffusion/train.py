@@ -1,5 +1,6 @@
 import os
 import random
+import logging
 import torch
 
 from .forward import ForwardKernel
@@ -7,6 +8,9 @@ from .policy import ReversePolicy
 from .mask import FeasibilityMask
 from .graph import MoleculeGraph
 from .backbone import ATOM_TYPES
+
+
+logger = logging.getLogger(__name__)
 
 
 def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
@@ -83,8 +87,21 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
         batch_loss.backward()
         optimizer.step()
 
+        preds = probs.argmax(dim=1)
+        batch_acc = (preds == y).float().mean().item()
+
         if writer is not None:
             writer.add_scalar("loss/train", batch_loss.item(), global_step + i)
+            writer.add_scalar("accuracy/train", batch_acc, global_step + i)
+
+        logger.debug(
+            "Epoch %d Step %d/%d - loss: %.4f acc: %.4f",
+            epoch,
+            i + 1,
+            len(loader),
+            batch_loss.item(),
+            batch_acc,
+        )
 
         if ckpt_interval and (global_step + i) % ckpt_interval == 0:
             path = f"checkpoints/epoch{epoch}_step{global_step + i}.pt"
@@ -93,12 +110,17 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
                 "optimizer": optimizer.state_dict(),
             }, path)
 
-        preds = probs.argmax(dim=1)
         metrics["accuracy"] += (preds == y).sum().item()
         metrics["loss"] += ce.sum().item()
         metrics["n"] += B
 
     metrics["loss"] /= metrics["n"]
     metrics["accuracy"] /= metrics["n"]
+    logger.info(
+        "Epoch %d complete - loss: %.3f accuracy: %.3f",
+        epoch,
+        metrics["loss"],
+        metrics["accuracy"],
+    )
     return metrics
 
