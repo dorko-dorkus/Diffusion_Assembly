@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import logging
 from pathlib import Path
 
 import yaml
@@ -38,6 +39,9 @@ from assembly_diffusion.policy import ReversePolicy
 from assembly_diffusion.train import train_epoch
 from analysis import ks_test, sensitivity_over_lambda
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Individual experiment stages
@@ -45,7 +49,7 @@ from analysis import ks_test, sensitivity_over_lambda
 
 def run_ai_generation() -> None:
     """Generate assembly index annotations for the QM9 CHON subset."""
-    print("[AI generation] Creating QM9 annotations …")
+    logger.info("[AI generation] Creating QM9 annotations …")
     generate_qm9_chon_ai()
 
 
@@ -67,7 +71,7 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
         variants = [k for k in raw.keys() if k != "common"]
         for variant in variants:
             cfg = load_config(path, variant)
-            print(f"[Training] {path.name}:{variant}")
+            logger.info("[Training] %s:%s", path.name, variant)
 
             loader = get_dataloader(batch_size=cfg.batch, max_heavy=cfg.max_atoms)
             kernel = ForwardKernel()
@@ -90,9 +94,12 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
                     lambda_reg=cfg.guid_coeff,
                     epoch=epoch,
                 )
-                print(
-                    f"  Epoch {epoch + 1}/{epochs} - loss: {metrics['loss']:.3f} "
-                    f"acc: {metrics['accuracy']:.3f}"
+                logger.info(
+                    "  Epoch %d/%d - loss: %.3f acc: %.3f",
+                    epoch + 1,
+                    epochs,
+                    metrics["loss"],
+                    metrics["accuracy"],
                 )
 
 
@@ -101,7 +108,7 @@ def run_sampling() -> None:
     from assembly_diffusion.graph import MoleculeGraph
     from assembly_diffusion.sampler import Sampler
 
-    print("[Sampling] Drawing one molecule …")
+    logger.info("[Sampling] Drawing one molecule …")
     torch.manual_seed(0)
     x_init = MoleculeGraph(["C", "O"], torch.zeros((2, 2), dtype=torch.int64))
     kernel = ForwardKernel()
@@ -110,32 +117,36 @@ def run_sampling() -> None:
     sampler = Sampler(policy, mask)
     x = sampler.sample(kernel.T, x_init, gamma=1.0)
     try:
-        print("  Sampled SMILES:", x.canonical_smiles())
+        logger.info("  Sampled SMILES: %s", x.canonical_smiles())
     except Exception:
-        print("  Sampled molecule has no valid SMILES representation")
+        logger.info("  Sampled molecule has no valid SMILES representation")
 
 
 def run_analysis() -> None:
     """Run lightweight analysis on the generated data."""
     import pandas as pd
 
-    print("[Analysis] Running statistical checks …")
+    logger.info("[Analysis] Running statistical checks …")
     path = ROOT / "qm9_chon_ai.csv"
     if not path.exists():
-        print("  No data available for analysis")
+        logger.info("  No data available for analysis")
         return
 
     df = pd.read_csv(path)
     if df.empty:
-        print("  Dataset is empty – skipping analysis")
+        logger.info("  Dataset is empty – skipping analysis")
         return
 
     sample_a = df["ai_exact"].head(100)
     sample_b = df["ai_surrogate"].head(100)
     ks = ks_test(sample_a, sample_b)
     sens = sensitivity_over_lambda(df.head(5))
-    print(f"  KS statistic: {ks['statistic']:.3f}, p-value: {ks['pvalue']:.3g}")
-    print("  Sensitivity medians:", sens)
+    logger.info(
+        "  KS statistic: %.3f, p-value: %.3g",
+        ks["statistic"],
+        ks["pvalue"],
+    )
+    logger.info("  Sensitivity medians: %s", sens)
 
 
 # ---------------------------------------------------------------------------
