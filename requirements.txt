@@ -1,3 +1,6 @@
 torch
+pandas
+scipy
+statsmodels
 # RDKit is optional and often easier to install via conda:
 # conda install -c conda-forge rdkit
