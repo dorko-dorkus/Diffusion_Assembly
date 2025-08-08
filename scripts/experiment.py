@@ -22,6 +22,7 @@ from pathlib import Path
 
 import yaml
 import torch
+from datetime import datetime
 
 # Use GPU when available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,6 +41,7 @@ from assembly_diffusion.mask import FeasibilityMask
 from assembly_diffusion.backbone import GNNBackbone
 from assembly_diffusion.policy import ReversePolicy
 from assembly_diffusion.train import train_epoch
+from assembly_diffusion.monitor import RunMonitor
 from analysis import ks_test, sensitivity_over_lambda
 
 logging.basicConfig(level=logging.INFO)
@@ -86,6 +88,9 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
             }.get(cfg.optimiser.lower(), torch.optim.AdamW)
             optimiser = opt_cls(policy.parameters(), lr=cfg.lr)
 
+            run_dir = f"runs/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            monitor = RunMonitor(run_dir, use_tb=True)
+
             epochs = 1 if smoke else cfg.epochs
             for epoch in range(epochs):
                 metrics = train_epoch(
@@ -96,7 +101,14 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
                     optimiser,
                     lambda_reg=cfg.guid_coeff,
                     epoch=epoch,
+                    monitor=monitor,
+                    ckpt_interval=1000,
                 )
+                if monitor and metrics is not None:
+                    if "loss" in metrics:
+                        monitor.scalar("loss/epoch", float(metrics["loss"]), epoch)
+                    if "accuracy" in metrics:
+                        monitor.scalar("acc/epoch", float(metrics["accuracy"]), epoch)
                 logger.info(
                     "  Epoch %d/%d - loss: %.3f acc: %.3f",
                     epoch + 1,
@@ -105,6 +117,7 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
                     metrics["accuracy"],
                 )
 
+            monitor.close()
 
 def run_sampling() -> None:
     """Draw a single sample from the current policy."""
