@@ -1,13 +1,26 @@
 import os
 import random
 import logging
+import time
 import torch
+
+try:
+    import psutil
+except Exception:
+    psutil = None
+
+try:
+    import pynvml
+    pynvml.nvmlInit()
+except Exception:
+    pynvml = None
 
 from .forward import ForwardKernel
 from .policy import ReversePolicy
 from .mask import FeasibilityMask
 from .graph import MoleculeGraph
 from .backbone import ATOM_TYPES
+from .monitor import RunMonitor
 
 
 logger = logging.getLogger(__name__)
@@ -28,9 +41,19 @@ def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
     return random.choice(diff)
 
 
-def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
-                mask: FeasibilityMask, optimizer, lambda_reg: float = 0.0,
-                *, epoch: int = 0, writer=None, ckpt_interval: int = 500):
+def train_epoch(
+    loader,
+    kernel: ForwardKernel,
+    policy: ReversePolicy,
+    mask: FeasibilityMask,
+    optimizer,
+    lambda_reg: float = 0.0,
+    *,
+    epoch: int = 0,
+    writer=None,
+    ckpt_interval: int | None = 500,
+    monitor: RunMonitor | None = None,
+):
     """Train ``policy`` for one epoch over ``loader``.
 
     The ``loader`` is expected to yield tuples ``(atom_tensor, bond_tensor)``
@@ -47,10 +70,15 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
     global_step = epoch * len(loader)
     device = next(policy.parameters()).device
 
+    total_steps = len(loader)
+    last_res_log = time.time()
+    step_in_epoch = 0
+
     if ckpt_interval:
         os.makedirs("checkpoints", exist_ok=True)
 
     for i, (atom_tensor, bond_tensor) in enumerate(loader):
+        step_in_epoch += 1
         optimizer.zero_grad()
         bond_tensor = bond_tensor.to(device, non_blocking=True)
 
@@ -95,21 +123,60 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
             writer.add_scalar("loss/train", batch_loss.item(), global_step + i)
             writer.add_scalar("accuracy/train", batch_acc, global_step + i)
 
-        logger.debug(
-            "Epoch %d Step %d/%d - loss: %.4f acc: %.4f",
-            epoch,
-            i + 1,
-            len(loader),
-            batch_loss.item(),
-            batch_acc,
-        )
+        # Periodic non-blocking status
+        if monitor and (step_in_epoch % 10 == 0):
+            monitor.tick(step=step_in_epoch, total=total_steps)
+        if monitor and (step_in_epoch % 50 == 0):
+            try:
+                monitor.scalar("loss/train", float(batch_loss.detach().cpu()), step=step_in_epoch)
+            except Exception:
+                pass
 
-        if ckpt_interval and (global_step + i) % ckpt_interval == 0:
-            path = f"checkpoints/epoch{epoch}_step{global_step + i}.pt"
-            torch.save({
-                "policy": policy.state_dict(),
-                "optimizer": optimizer.state_dict(),
-            }, path)
+        # Lightweight resource snapshot roughly every 30 seconds
+        now = time.time()
+        if monitor and (now - last_res_log) > 30:
+            cpu = psutil.cpu_percent(interval=None) if psutil else None
+            ram = (psutil.virtual_memory().used / 1e9) if psutil else None
+            gpu_util = vram = None
+            if pynvml:
+                try:
+                    dev = pynvml.nvmlDeviceGetHandleByIndex(0)
+                    util = pynvml.nvmlDeviceGetUtilizationRates(dev)
+                    mem = pynvml.nvmlDeviceGetMemoryInfo(dev)
+                    gpu_util = float(util.gpu)
+                    vram = float(mem.used / 1e9)
+                except Exception:
+                    pass
+            monitor.resources(
+                cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
+            )
+            last_res_log = now
+
+        # Console status line
+        if (step_in_epoch % 10) == 0:
+            eta_s = "?"
+            print(
+                f"\r[epoch {epoch:03d}] step {step_in_epoch:06d}/{total_steps} "
+                f"loss={float(batch_loss):.4f} ETA~{eta_s}s",
+                end="",
+                flush=True,
+            )
+
+        if ckpt_interval and (step_in_epoch % ckpt_interval == 0):
+            tmp = f"checkpoints/epoch{epoch}_step{step_in_epoch}.tmp"
+            final = f"checkpoints/epoch{epoch}_step{step_in_epoch}.pt"
+            torch.save(
+                {
+                    "policy": policy.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch,
+                    "step_in_epoch": step_in_epoch,
+                },
+                tmp,
+            )
+            os.replace(tmp, final)
+            if monitor:
+                monitor.set_checkpoint(final)
 
         metrics["accuracy"] += (preds == y).sum().item()
         metrics["loss"] += ce.sum().item()
@@ -124,4 +191,3 @@ def train_epoch(loader, kernel: ForwardKernel, policy: ReversePolicy,
         metrics["accuracy"],
     )
     return metrics
-
