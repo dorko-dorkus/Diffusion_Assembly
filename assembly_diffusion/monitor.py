@@ -19,7 +19,8 @@ class RunMonitor:
 
     Writes JSONL events and periodically updates a heartbeat file to indicate
     liveness. Optionally records TensorBoard scalars and images if
-    ``torch.utils.tensorboard`` is present.
+    ``torch.utils.tensorboard`` is present. Log file rolls daily to
+    ``events-YYYYMMDD.jsonl`` to avoid unbounded growth.
     """
 
     def __init__(
@@ -33,6 +34,7 @@ class RunMonitor:
         self.run_dir = run_dir
         self.jsonl_path = os.path.join(run_dir, "events.jsonl")
         self.heartbeat_path = os.path.join(run_dir, "heartbeat.json")
+        self._current_date = datetime.utcnow().date()
         self._q = queue.Queue(maxsize=10000)
         self._stop = threading.Event()
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
@@ -125,16 +127,36 @@ class RunMonitor:
             pass
 
     def _writer_loop(self) -> None:
-        with open(self.jsonl_path, "a", buffering=1) as f:
+        current_date = self._current_date
+        f = open(self.jsonl_path, "a", buffering=1)
+        try:
             while not self._stop.is_set() or not self._q.empty():
                 try:
                     evt = self._q.get(timeout=0.25)
                 except queue.Empty:
                     continue
                 try:
+                    today = datetime.utcnow().date()
+                    if today != current_date:
+                        f.close()
+                        rotated = os.path.join(
+                            self.run_dir, f"events-{current_date.strftime('%Y%m%d')}.jsonl"
+                        )
+                        try:
+                            os.replace(self.jsonl_path, rotated)
+                        except Exception:
+                            pass
+                        f = open(self.jsonl_path, "a", buffering=1)
+                        current_date = today
+                        self._current_date = current_date
                     f.write(json.dumps(evt) + "\n")
                 except Exception:
                     pass
+        finally:
+            try:
+                f.close()
+            except Exception:
+                pass
 
     def _write_heartbeat(self) -> None:
         hb = {
