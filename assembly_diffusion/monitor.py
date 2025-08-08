@@ -14,11 +14,14 @@ except Exception:
 
 
 class RunMonitor:
-    """Non-blocking run monitor. Writes JSONL events and a heartbeat file.
-    Optional TensorBoard scalars and images if torch.utils.tensorboard is present.
+    """Non-blocking run monitor.
+
+    Writes JSONL events and periodically updates a heartbeat file to indicate
+    liveness. Optionally records TensorBoard scalars and images if
+    ``torch.utils.tensorboard`` is present.
     """
 
-    def __init__(self, run_dir: str, use_tb: bool = True):
+    def __init__(self, run_dir: str, use_tb: bool = True, hb_interval: float = 30.0):
         os.makedirs(run_dir, exist_ok=True)
         self.run_dir = run_dir
         self.jsonl_path = os.path.join(run_dir, "events.jsonl")
@@ -32,7 +35,13 @@ class RunMonitor:
         self._step = 0
         self._total = None
         self._ckpt_path = None
+        self._hb_interval = hb_interval
         self.tb = SummaryWriter(run_dir) if (use_tb and SummaryWriter) else None
+
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True
+        )
+        self._heartbeat_thread.start()
 
         # Signal handlers are best-effort. They exist on Unix; on Windows they may not.
         try:
@@ -44,6 +53,7 @@ class RunMonitor:
     def close(self) -> None:
         self._stop.set()
         self._writer_thread.join(timeout=5)
+        self._heartbeat_thread.join(timeout=5)
         if self.tb:
             try:
                 self.tb.flush()
@@ -88,17 +98,6 @@ class RunMonitor:
             vram_used_gb=vram_used_gb,
             gpu_util=gpu_util,
         )
-        # Heartbeat is a coarse-grained liveness indicator
-        hb = {
-            "time": datetime.utcnow().isoformat() + "Z",
-            "step": self._step,
-            "last_ckpt": self._ckpt_path,
-        }
-        try:
-            with open(self.heartbeat_path, "w") as f:
-                json.dump(hb, f)
-        except Exception:
-            pass
 
     def set_checkpoint(self, path: str) -> None:
         self._ckpt_path = path
@@ -128,6 +127,23 @@ class RunMonitor:
                     f.write(json.dumps(evt) + "\n")
                 except Exception:
                     pass
+
+    def _write_heartbeat(self) -> None:
+        hb = {
+            "time": datetime.utcnow().isoformat() + "Z",
+            "step": self._step,
+            "last_ckpt": self._ckpt_path,
+        }
+        try:
+            with open(self.heartbeat_path, "w") as f:
+                json.dump(hb, f)
+        except Exception:
+            pass
+
+    def _heartbeat_loop(self) -> None:
+        while not self._stop.is_set():
+            self._write_heartbeat()
+            self._stop.wait(self._hb_interval)
 
     def _sig_dump(self, *_):
         self._event(
