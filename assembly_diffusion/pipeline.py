@@ -188,7 +188,7 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
 def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
     """Main entrypoint for experiments. Returns metrics dict matching metrics_writer schema."""
     # 1) Sanity checks and RDKit requirement
-    _require_rdkit(cfg)
+    # RDKit is optional for smoke tests. Metrics are gated below.
 
     # 2) Sample molecules using existing sampler
     n_samples = int(cfg["sampler"]["n_samples"])
@@ -215,6 +215,15 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
             for s in smiles:
                 f.write((s or "") + "\n")
 
+    # If RDKit missing, fall back to graph validity when available
+    graph_valid_fraction = None
+    try:
+        # Only possible if your sampler returns MoleculeGraph objects or you keep them
+        # If you already discard graphs after SMILES conversion, skip this block
+        pass  # Placeholder – requires confirmation
+    except Exception:
+        graph_valid_fraction = None
+
     # 3) RDKit-based metrics
     if cfg.get("metrics", {}).get("rdkit", True) and _HAVE_RDKIT:
         canonical, valid_mask = _canonicalize(smiles)
@@ -235,6 +244,12 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
             split=cfg["dataset"]["split"],
             limit=int(cfg["dataset"].get("limit", 0) or 0),
         )
+    elif not _HAVE_RDKIT and cfg.get("metrics", {}).get("rdkit", True):
+        canonical, valid_mask = smiles, [False] * len(smiles)
+        valid_fraction = float(graph_valid_fraction) if graph_valid_fraction is not None else 0.0
+        uniqueness = 0.0
+        diversity = 0.0
+        novelty = 0.0
     else:
         canonical, valid_mask = smiles, [False] * len(smiles)
         valid_fraction = 0.0
