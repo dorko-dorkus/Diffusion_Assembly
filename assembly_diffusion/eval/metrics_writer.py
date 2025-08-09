@@ -1,19 +1,45 @@
+"""Helper utilities for serialising experiment metrics."""
+
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 SCHEMA_VERSION = "1.0"
 
 
-def write_metrics(outdir, *, valid_fraction, uniqueness, diversity, novelty, median_ai):
-    payload = {
-        "schema_version": SCHEMA_VERSION,
-        "valid_fraction": float(valid_fraction),
-        "uniqueness": float(uniqueness),
-        "diversity": float(diversity),
-        "novelty": float(novelty),
-        "median_ai": float(median_ai),
-    }
+def write_metrics(outdir: str, **metrics: Any) -> None:
+    """Write ``metrics.json`` for an experiment run.
+
+    Historically this helper accepted a fixed set of keyword-only arguments for
+    the handful of metrics that were available.  As the project grew it became
+    useful to store additional statistics, for example confidence interval (CI)
+    bounds for ablation studies.  To keep the call site flexible the function
+    now accepts arbitrary keyword arguments and simply serialises them to
+    ``metrics.json``.
+
+    Parameters
+    ----------
+    outdir:
+        Directory in which ``metrics.json`` will be written.  The directory is
+        created if necessary.
+    **metrics:
+        Mapping of metric names to values.  Numeric values are cast to ``float``
+        for JSON serialisation; other types (e.g. lists for CIs) are stored as
+        provided.
+    """
+
+    payload: dict[str, Any] = {"schema_version": SCHEMA_VERSION}
+    for key, value in metrics.items():
+        # Cast basic numeric types to float for consistency.  Complex structures
+        # such as CI lists are emitted unchanged.
+        if isinstance(value, (int, float)):
+            payload[key] = float(value)
+        else:
+            payload[key] = value
+
     Path(outdir).mkdir(parents=True, exist_ok=True)
-    with open(os.path.join(outdir, "metrics.json"), "w") as f:
+    with open(os.path.join(outdir, "metrics.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)

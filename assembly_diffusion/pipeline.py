@@ -409,11 +409,26 @@ def run_pipeline(
         _calibrate_ai_surrogate(outdir, n_mols=n_cal)
 
     # 5) Return metrics for write_metrics
+    # Confidence intervals are not yet computed in this reference
+    # implementation.  To support downstream consumers – notably the
+    # ``ab_compare`` script used in tests – we attach zero-width placeholder
+    # intervals where the lower and upper bounds equal the point estimate.  The
+    # structure mirrors the intended future format and can be replaced with real
+    # statistics once available.
+
+    def _ci_placeholder(x: float) -> list[float]:
+        return [float(x), float(x)]
+
     metrics = {
         "valid_fraction": float(valid_fraction),
+        "valid_fraction_ci": _ci_placeholder(valid_fraction),
         "uniqueness": float(uniqueness),
+        "uniqueness_ci": _ci_placeholder(uniqueness),
         "diversity": float(diversity),
+        "diversity_ci": _ci_placeholder(diversity),
         "novelty": float(novelty),
+        "novelty_ci": _ci_placeholder(novelty),
         "median_ai": float(median_ai),
+        "median_ai_ci": _ci_placeholder(median_ai),
     }
     return metrics, flags
