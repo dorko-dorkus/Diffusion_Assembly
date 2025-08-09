@@ -2,7 +2,55 @@ import torch
 from torch import Tensor
 from typing import Tuple
 
-from .assembly_index import approx_AI
+from .assembly_index import approx_AI, AssemblyIndex
+
+
+@torch.no_grad()
+def assembly_guidance_scores(batch_states, cand_actions, grammar, mode: str = "A_lower") -> torch.Tensor:
+    """Compute guidance scores for candidate actions in each state.
+
+    Parameters
+    ----------
+    batch_states:
+        Iterable of state objects.
+    cand_actions:
+        List of per-state candidate action collections.
+    grammar:
+        Object providing ``apply_action``.
+    mode:
+        One of ``"A_exact"``, ``"A_lower"`` or ``"heuristic"`` controlling the
+        scoring method.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor of shape ``[B, A_max]`` containing scores with ``-inf`` padding.
+    """
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    B = len(batch_states)
+    A_max = max((len(a) for a in cand_actions), default=0)
+    scores = torch.full((B, A_max), float("-inf"), device=device)
+
+    for i, (state, actions) in enumerate(zip(batch_states, cand_actions)):
+        vals = []
+        for a in actions:
+            succ = grammar.apply_action(state, a)
+            if mode == "A_exact":
+                A = AssemblyIndex.A_star_exact_or_none(succ)
+                if A is None:
+                    A = AssemblyIndex.A_lower_bound(succ)
+            elif mode == "A_lower":
+                A = AssemblyIndex.A_lower_bound(succ)
+            else:
+                A = grammar.heuristic_A(succ)
+            vals.append(float(A))
+        if not vals:
+            continue
+        t = torch.tensor(vals, device=device)
+        t = (t - t.mean()) / (t.std(unbiased=False) + 1e-8)
+        scores[i, : len(vals)] = t
+    return scores
 
 
 def reweight(logits: Tensor, graph, delta_scores: Tensor, gamma: float, clip_range: Tuple[float, float]) -> Tensor:

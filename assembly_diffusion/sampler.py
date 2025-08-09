@@ -4,7 +4,7 @@ from torch.distributions import Categorical
 from .mask import FeasibilityMask
 from .policy import ReversePolicy
 from .graph import MoleculeGraph
-from .guidance import reweight
+from .guidance import reweight, assembly_guidance_scores
 
 class Sampler:
     """Run reverse diffusion sampling using a policy and feasibility mask."""
@@ -95,3 +95,48 @@ class Sampler:
                 x.bonds[i, j] = x.bonds[j, i] = b
             traj.append(x.copy())
         return traj
+
+
+@torch.no_grad()
+def sample_with_guidance(policy, grammar, init_states, cfg, device=None):
+    """Sample trajectories with optional guidance scores."""
+
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    gamma = float(cfg.guidance_gamma)
+
+    states = list(init_states)
+    finished = [False] * len(states)
+    traj = [[] for _ in states]
+
+    for step in range(cfg.max_steps):
+        if all(finished):
+            break
+        cand_actions = [grammar.enumerate_actions(s) if not f else [] for s, f in zip(states, finished)]
+        masks = grammar.actions_to_mask(states, cand_actions, device=device)
+        logits = policy.logits(states, cand_actions, device=device)
+
+        if gamma != 0.0:
+            scores = assembly_guidance_scores(states, cand_actions, grammar, mode=cfg.guidance_mode)
+            logits = logits + gamma * scores
+
+        logits = logits.masked_fill(~masks, float("-inf"))
+        probs = torch.softmax(logits, dim=-1)
+        probs[~torch.isfinite(probs).any(dim=-1)] = 0.0
+        idx = torch.zeros(len(states), dtype=torch.long, device=device)
+        valid = probs.sum(dim=-1) > 0
+        if valid.any():
+            idx_valid = torch.multinomial(probs[valid].clamp(min=0), num_samples=1).squeeze(1)
+            idx[valid] = idx_valid
+
+        for i, aidx in enumerate(idx.tolist()):
+            if finished[i]:
+                continue
+            if aidx < len(cand_actions[i]):
+                a = cand_actions[i][aidx]
+                states[i] = grammar.apply_action(states[i], a)
+                traj[i].append(a)
+                finished[i] = grammar.is_terminal(states[i])
+            else:
+                finished[i] = True
+
+    return states, traj
