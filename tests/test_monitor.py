@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import queue
 from pathlib import Path
@@ -126,3 +127,38 @@ def test_eta_ema_smoothing(tmp_path, monkeypatch):
     assert m._dt_ema < ema_after_outlier
 
     m.close()
+
+
+def test_daily_rotation_symlink(tmp_path, monkeypatch):
+    import datetime as dt
+    import assembly_diffusion.monitor as mmod
+
+    class FakeDatetime:
+        current = dt.datetime(2024, 1, 1)
+
+        @classmethod
+        def utcnow(cls):
+            return cls.current
+
+        @classmethod
+        def utcfromtimestamp(cls, ts):
+            return dt.datetime.utcfromtimestamp(ts)
+
+    monkeypatch.setattr(mmod, "datetime", FakeDatetime)
+
+    m = mmod.RunMonitor(tmp_path, use_tb=False, hb_interval=999)
+    m.scalar("a", 1.0, 0)
+    time.sleep(0.2)
+
+    FakeDatetime.current = dt.datetime(2024, 1, 2)
+    m.scalar("b", 2.0, 1)
+    time.sleep(0.5)
+    m.close()
+
+    first = tmp_path / "events-20240101.jsonl"
+    second = tmp_path / "events-20240102.jsonl"
+    link = tmp_path / "events.jsonl"
+    assert first.exists()
+    assert second.exists()
+    assert link.is_symlink()
+    assert os.path.samefile(link, second)
