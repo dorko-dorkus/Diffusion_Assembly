@@ -22,7 +22,7 @@ learn the weighting parameters from labelled data.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import torch
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from collections import Counter, defaultdict
 from typing import List, Tuple, Dict, Optional
 import random
 
