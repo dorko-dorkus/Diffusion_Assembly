@@ -10,7 +10,7 @@ import random
 import subprocess
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -50,8 +50,8 @@ class RunMonitor:
         hb_interval: float = 30.0,
         eta_window: int = 100,
         *,
-        config: object | None = None,
-        dataset_path: str | None = None,
+        config: Any | None = None,
+        dataset_path: str | os.PathLike[str] | None = None,
     ):
         os.makedirs(run_dir, exist_ok=True)
         self.run_dir = run_dir
@@ -127,7 +127,11 @@ class RunMonitor:
                 pass
 
     # Public API
-    def run_start(self, config: object | None = None, dataset_path: str | None = None) -> None:
+    def run_start(
+        self,
+        config: Any | None = None,
+        dataset_path: str | os.PathLike[str] | None = None,
+    ) -> None:
         seeds: dict[str, int] = {}
         try:
             seeds["python"] = int(random.getstate()[1][0])
@@ -200,7 +204,7 @@ class RunMonitor:
         if dataset_path:
             try:
                 h = hashlib.sha256()
-                with open(dataset_path, "rb") as f:
+                with open(os.fspath(dataset_path), "rb") as f:
                     for chunk in iter(lambda: f.read(1 << 20), b""):
                         h.update(chunk)
                 dataset_checksum = h.hexdigest()
