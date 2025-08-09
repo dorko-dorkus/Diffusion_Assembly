@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from assembly_diffusion.eval.metrics_writer import write_metrics
 
 
 def _git_hash() -> str:
@@ -78,7 +79,14 @@ if __name__ == "__main__":
     # save SMILES
     # with open(os.path.join(outdir, "samples.smi"), "w") as f: ...
     # save metrics
-    # json.dump(metrics, open(os.path.join(outdir, "metrics.json"), "w"), indent=2)
+    # write_metrics(
+    #     outdir,
+    #     valid_fraction=...,  # fraction of valid structures
+    #     uniqueness=...,  # fraction of unique structures
+    #     diversity=...,  # pairwise Tanimoto diversity
+    #     novelty=...,  # fraction not seen in training
+    #     median_ai=...,  # median AI score
+    # )
     # save AI scores
     # np.savetxt(os.path.join(outdir, "ai_scores.csv"), ai_scores, delimiter=",")
 
