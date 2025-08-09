@@ -5,7 +5,10 @@ import json
 import os
 import time
 import pandas as pd
+import logging
 from assembly_diffusion.calibrators.sampler import Sampler
+
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("universe", choices=["S", "T"], help="Calibrator universe")
@@ -55,7 +58,7 @@ if __name__ == "__main__":
         ]
 
     freq.to_csv(args.out, index=False)
-    print(f"Wrote {len(freq)} rows to {args.out}")
+    logger.info("Wrote %d rows to %s", len(freq), args.out)
 
     outdir = f"results/calibrators_{int(time.time())}"
     os.makedirs(outdir, exist_ok=True)
@@ -80,4 +83,4 @@ if __name__ == "__main__":
         indent=2,
     )
 
-    print(f"[OK] Calibrator outputs -> {outdir}")
+    logger.info("[OK] Calibrator outputs -> %s", outdir)

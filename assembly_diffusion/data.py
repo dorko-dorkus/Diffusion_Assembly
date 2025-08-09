@@ -2,6 +2,8 @@ import hashlib
 import os
 import tarfile
 import urllib.request
+import hashlib
+import logging
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -9,6 +11,8 @@ from torch.utils.data import DataLoader, Dataset
 
 from .graph import MoleculeGraph
 from .backbone import ATOM_MAP
+
+logger = logging.getLogger(__name__)
 
 URL = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/gdb9.tar.gz"
 QM9_SHA256 = "45255048ac6d83ea4b923ecdf7d6fb6dc62bfec5e80fbc5bcfd93a62157a31db"
@@ -45,20 +49,20 @@ def download_qm9(
     os.makedirs(data_dir, exist_ok=True)
     archive_path = os.path.join(data_dir, "gdb9.tar.gz")
     if not _verify_sha256(archive_path, sha256):
-        print("Downloading QM9 dataset.")
+        logger.info("Downloading QM9 dataset.")
         try:
             urllib.request.urlretrieve(url, archive_path)
         except Exception as e:  # pragma: no cover - network failure
             raise RuntimeError(f"Failed to download QM9 dataset: {e}") from e
         if not _verify_sha256(archive_path, sha256):
             raise RuntimeError("Checksum mismatch for downloaded QM9 archive.")
-        print("Download complete.")
+        logger.info("Download complete.")
 
     if not os.path.exists(os.path.join(data_dir, "gdb9.sdf")):
         try:
             with tarfile.open(archive_path, "r:gz") as tar:
                 tar.extractall(path=data_dir)
-                print("Extraction complete.")
+                logger.info("Extraction complete.")
         except tarfile.TarError as e:  # pragma: no cover - corrupted archive
             os.remove(archive_path)
             raise RuntimeError(

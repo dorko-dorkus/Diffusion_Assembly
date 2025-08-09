@@ -3,8 +3,11 @@ import subprocess
 import sys
 import glob
 from pathlib import Path
+import logging
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -16,7 +19,7 @@ def main() -> None:
     """
     repo_root = Path(__file__).resolve().parent
     if not (repo_root / ".git").exists():
-        print("Unable to determine git commit: missing .git directory", file=sys.stderr)
+        logger.error("Unable to determine git commit: missing .git directory")
         raise SystemExit(1)
 
     try:
@@ -28,7 +31,7 @@ def main() -> None:
             .strip()
         )
     except Exception as exc:
-        print(f"Unable to determine git commit: {exc}", file=sys.stderr)
+        logger.error("Unable to determine git commit: %s", exc)
         raise SystemExit(1)
 
     ok = True
@@ -36,20 +39,19 @@ def main() -> None:
         try:
             data = torch.load(path, map_location="cpu")
         except Exception as exc:  # pragma: no cover - best effort load
-            print(f"Failed to load {path}: {exc}", file=sys.stderr)
+            logger.error("Failed to load %s: %s", path, exc)
             ok = False
             continue
         commit = data.get("commit")
         if commit != head:
-            print(
-                f"Commit mismatch for {path}: expected {head}, got {commit}",
-                file=sys.stderr,
+            logger.error(
+                "Commit mismatch for %s: expected %s, got %s", path, head, commit
             )
             ok = False
     if not ok:
         raise SystemExit(1)
 
-    print("Checkpoint integrity verified")
+    logger.info("Checkpoint integrity verified")
 
 
 if __name__ == "__main__":

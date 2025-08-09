@@ -1,5 +1,7 @@
-import json, os, time, numpy as np, torch
+import json, os, time, numpy as np, torch, logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # TODO: load features + labels, define model, train, k-fold, save metrics
 outdir = f"results/surrogate_train_{int(time.time())}"
@@ -8,4 +10,4 @@ metrics = {"mae": 0.0, "rmse": 0.0, "folds": []}  # fill real values
 json.dump(metrics, open(os.path.join(outdir,"cv_metrics.json"),"w"), indent=2)
 torch.save({"state_dict": None}, os.path.join(outdir,"model.pt"))
 open(os.path.join(outdir, "calibration_plot.png"), "wb").close()
-print(f"[OK] Surrogate artifacts -> {outdir}")
+logger.info("[OK] Surrogate artifacts -> %s", outdir)

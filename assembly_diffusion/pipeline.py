@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, List, Tuple, Optional, Dict, Any
 
 import numpy as np
+import logging
 
 # Try RDKit early to fail fast when metrics require it
 try:
@@ -42,6 +43,8 @@ except Exception:
     AISurrogate = None
     AssemblyMC = None
     MoleculeGraph = None
+
+logger = logging.getLogger(__name__)
 
 
 def _require_rdkit(cfg: Dict[str, Any]) -> None:
@@ -212,8 +215,11 @@ def _score_ai_exact(
         except Exception:
             out.append(None)
         if (i + 1) % 500 == 0:
-            print(
-                f"[ai-exact] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+            logger.info(
+                "[ai-exact] scored %d/%d elapsed=%.1fs",
+                i + 1,
+                len(smiles),
+                time.time() - start,
             )
     return out
 
@@ -230,8 +236,11 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
         for i, s in enumerate(smiles):
             out.append(float(len(s))) if s else out.append(None)
             if (i + 1) % 500 == 0:
-                print(
-                    f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+                logger.info(
+                    "[ai-surrogate] scored %d/%d elapsed=%.1fs",
+                    i + 1,
+                    len(smiles),
+                    time.time() - start,
                 )
         return out
 
@@ -250,8 +259,11 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
         else:
             out.append(float(len(s)))
         if (i + 1) % 500 == 0:
-            print(
-                f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+            logger.info(
+                "[ai-surrogate] scored %d/%d elapsed=%.1fs",
+                i + 1,
+                len(smiles),
+                time.time() - start,
             )
     return out
 

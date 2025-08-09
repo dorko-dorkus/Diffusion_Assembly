@@ -152,11 +152,13 @@ def train_epoch(
         # Console status line
         if (step_in_epoch % 10) == 0:
             eta_s = "?"
-            print(
-                f"\r[epoch {epoch:03d}] step {step_in_epoch:06d}/{total_steps} "
-                f"loss={float(batch_loss):.4f} ETA~{eta_s}s",
-                end="",
-                flush=True,
+            logger.info(
+                "[epoch %03d] step %06d/%d loss=%.4f ETA~%ss",
+                epoch,
+                step_in_epoch,
+                total_steps,
+                float(batch_loss),
+                eta_s,
             )
 
         if ckpt_interval and (step_in_epoch % ckpt_interval == 0):
