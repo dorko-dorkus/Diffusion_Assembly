@@ -4,6 +4,7 @@ from pathlib import Path
 
 # ensure repository root on path for package imports
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+from assembly_diffusion.pipeline import run_pipeline
 
 
 def _git_hash():
@@ -38,23 +39,6 @@ def _manifest(outdir, cfg, extra):
     }
     with open(Path(outdir) / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
-
-
-def run_pipeline(cfg, outdir):
-    """
-    Temporary stub to unblock smoke tests.
-    Replace with the real sampler and evaluation, but always return a dict
-    that matches the metrics writer signature.
-    """
-    # If you already generate samples.smi here, you can compute real metrics.
-    # For now return neutral values.
-    return {
-        "valid_fraction": 0.0,
-        "uniqueness": 0.0,
-        "diversity": 0.0,
-        "novelty": 0.0,
-        "median_ai": 0.0,
-    }
 
 
 if __name__ == "__main__":

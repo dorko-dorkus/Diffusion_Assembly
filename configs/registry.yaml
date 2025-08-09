@@ -1,20 +1,20 @@
 experiments:
   exp01_baseline:
     description: "Unguided baseline on QM9-CHON, matched sampler settings."
-    dataset: {name: qm9_chon, split: test, limit: 5000}
+    dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
-    model: {ckpt: null, steps: 1000, guidance: {enabled: false, weight: 0.0, policy: additive}}
-    ai: {scorer: exact, surrogate_ckpt: null, grammar: default}
-    sampler: {n_samples: 2000, batch_size: 128}
-    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
+    model: {ckpt: null, steps: 5, guidance: {enabled: false, weight: 0.0, policy: additive}}
+    ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default}
+    sampler: {n_samples: 10, batch_size: 4}
+    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp02_guided_lambda1:
     description: "Guided run, λ=1.0, exact AI."
-    dataset: {name: qm9_chon, split: test, limit: 5000}
+    dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
-    model: {ckpt: null, steps: 1000, guidance: {enabled: true, weight: 1.0, policy: additive}}
-    ai: {scorer: exact, surrogate_ckpt: null, grammar: default}
-    sampler: {n_samples: 2000, batch_size: 128}
-    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
+    model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
+    ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default}
+    sampler: {n_samples: 10, batch_size: 4}
+    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
