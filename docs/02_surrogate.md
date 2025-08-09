@@ -10,3 +10,8 @@ Artifacts saved per training:
 - model.pt
 - cv_metrics.json
 - calibration_plot.png
+
+During evaluation runs the pipeline additionally writes an `ai_calibration.csv`
+file containing quantiles of the absolute error between surrogate predictions
+and Monte Carlo estimates on a subset of QM9 molecules.  The file is stored
+alongside `metrics.json` for each run.

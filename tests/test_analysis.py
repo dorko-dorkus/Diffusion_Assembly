@@ -8,6 +8,7 @@ from analysis import (
     mixed_effects_logistic,
     bootstrap_delta_median,
     sensitivity_over_lambda,
+    error_quantiles,
 )
 
 
@@ -48,3 +49,12 @@ def test_sensitivity_over_lambda():
     medians = sensitivity_over_lambda(df, lambdas=[0.25, 0.75, 1.0])
     assert medians[1.0] == pytest.approx(np.median(df["ai_exact"]))
     assert set(medians.keys()) == {0.25, 0.75, 1.0}
+
+
+def test_error_quantiles():
+    pred = [1.0, 2.0, 3.0]
+    true = [1.0, 1.0, 4.0]
+    qs = error_quantiles(pred, true, quantiles=[0.0, 0.5, 1.0])
+    assert qs[0.0] == 0.0
+    assert qs[0.5] == pytest.approx(1.0)
+    assert qs[1.0] == pytest.approx(1.0)
