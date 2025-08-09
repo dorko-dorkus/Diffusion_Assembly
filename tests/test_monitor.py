@@ -15,3 +15,12 @@ def test_heartbeat_thread_runs(tmp_path):
     with hb_file.open() as f:
         hb = json.load(f)
     assert "time" in hb and "step" in hb
+
+
+def test_sentinel_poll(tmp_path):
+    m = RunMonitor(tmp_path, use_tb=False)
+    (tmp_path / "dump").touch()
+    (tmp_path / "checkpoint").touch()
+    ckpt, dump = m.poll()
+    assert ckpt and dump
+    m.close()

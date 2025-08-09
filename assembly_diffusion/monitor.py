@@ -58,6 +58,10 @@ class RunMonitor:
         )
         self._heartbeat_thread.start()
 
+        # Sentinel files for cross-platform "poke" mechanism.
+        self._dump_sentinel = os.path.join(run_dir, "dump")
+        self._ckpt_sentinel = os.path.join(run_dir, "checkpoint")
+
         # Signal handlers are best-effort. They exist on Unix; on Windows they may not.
         try:
             signal.signal(signal.SIGUSR1, self._sig_dump)
@@ -117,6 +121,33 @@ class RunMonitor:
     def set_checkpoint(self, path: str) -> None:
         self._ckpt_path = path
         self._event("checkpoint", path=path, step=self._step)
+
+    def poll(self) -> tuple[bool, bool]:
+        """Check for sentinel files requesting actions.
+
+        Returns a pair ``(checkpoint, dump)`` indicating whether a checkpoint
+        or a status dump was requested.  Sentinel files are removed after the
+        request is observed and appropriate events are emitted.
+        """
+
+        ckpt_req = os.path.exists(self._ckpt_sentinel)
+        dump_req = os.path.exists(self._dump_sentinel)
+
+        if ckpt_req:
+            try:
+                os.remove(self._ckpt_sentinel)
+            except Exception:
+                pass
+            self._sig_ckpt_req()
+
+        if dump_req:
+            try:
+                os.remove(self._dump_sentinel)
+            except Exception:
+                pass
+            self._sig_dump()
+
+        return ckpt_req, dump_req
 
     # Internals
     def _log_error_once(self, msg: str, exc: Exception) -> None:
