@@ -1,6 +1,33 @@
 # Grammar and Primitives (G, P)
 
-- Chemical universe: CHON, valence {C:4, N:3, O:2}, neutral molecules, bond types: single/double (no aromatic v0).
-- Assembly index evaluator: [implementation path] `assembly_diffusion/assembly_index.py` with calibrations in `assembly_diffusion/calibrators`.
+The diffusion process optimizes over an explicit molecular grammar **G** with
+primitive set **P**.
 
-Assumption: AI surrogate approximates exact AI; error bounds logged per run (see docs/02_surrogate.md).
+## Primitive set P
+- Atoms: {C, N, O, H} with valence caps {C:4, N:3, O:2, H:1}.
+- Bond orders: single and double; triple and aromatic bonds are excluded in v0.
+
+## Grammar G
+- **State space:** `MoleculeGraph` objects (see `assembly_diffusion/graph.py`)
+  whose atoms are drawn from P and whose bonds are integer orders.
+- **Start state:** a minimal seed graph used for sampling.
+- **Production rules:**
+  1. **Bond edit** `(i, j, b)` sets the bond order between existing atoms
+     `i` and `j` to `b ∈ {0,1,2}` (`0` deletes the bond).
+  2. **Atom insertion** `("ADD", i, a)` attaches a new atom `a ∈ {C,N,O,H}`
+     to atom `i` with a single bond.
+  3. **STOP** terminates growth.
+
+Each rule adds at most one bond, aligning with the assembly-theory intuition of
+"build by attaching one bond per step." Feasibility of actions is enforced by
+`FeasibilityMask` (`assembly_diffusion/mask.py`), which performs valence checks
+and optional RDKit sanitization.
+
+### Acyclic exactness
+For molecules whose bond graph is a tree, the exact assembly index
+`A*(x|G,P)` equals the number of edges because each step contributes a single
+bond. Calibrators in `assembly_diffusion/calibrators/strings.py` and
+`assembly_diffusion/calibrators/trees.py` validate this property.
+
+All experimental results are conditioned on this choice of `(G, P)`; changing
+the grammar or primitives alters the objective and conclusions.
