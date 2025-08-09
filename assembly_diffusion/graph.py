@@ -80,6 +80,36 @@ class MoleculeGraph:
         new_bonds[n, attach_site] = new_bonds[attach_site, n] = bond_order
         self.bonds = new_bonds
 
+    # Basic graph statistics -------------------------------------------------
+    def num_nodes(self) -> int:
+        return len(self.atoms)
+
+    def num_edges(self) -> int:
+        # Each bond contributes twice in the symmetric adjacency matrix
+        return int((self.bonds > 0).sum().item() // 2)
+
+    def num_connected_components(self) -> int:
+        n = len(self.atoms)
+        visited = set()
+        adj = self.bonds > 0
+        comps = 0
+        for i in range(n):
+            if i in visited:
+                continue
+            comps += 1
+            stack = [i]
+            while stack:
+                v = stack.pop()
+                if v in visited:
+                    continue
+                visited.add(v)
+                neighbours = torch.nonzero(adj[v]).flatten().tolist()
+                stack.extend(nb for nb in neighbours if nb not in visited)
+        return comps
+
+    def is_acyclic(self) -> bool:
+        return self.num_edges() == self.num_nodes() - self.num_connected_components()
+
     @staticmethod
     def from_rdkit(mol: "Chem.Mol") -> "MoleculeGraph":
         """Construct a :class:`MoleculeGraph` from an RDKit molecule."""
