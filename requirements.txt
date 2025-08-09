@@ -7,3 +7,5 @@ statsmodels
 rdkit-pypi; python_version < "3.12"
 # RDKit is optional and often easier to install via conda:
 # conda install -c conda-forge rdkit
+
+networkx

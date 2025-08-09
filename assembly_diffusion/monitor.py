@@ -396,3 +396,25 @@ class RunMonitor:
             self._dropped = 0
         if dropped:
             self._event("dropped_events", count=dropped)
+
+from dataclasses import dataclass
+import csv
+
+
+@dataclass
+class CSVLogger:
+    path: str
+    newline: str = "\n"
+
+    def open(self):
+        self._fh = open(self.path, "w", newline="")
+        self._writer = csv.writer(self._fh)
+        self._writer.writerow(["id","universe","grammar","As_lower","As_upper","validity","frequency","d_min"])
+        return self
+
+    def write_row(self, *row):
+        self._writer.writerow(row)
+
+    def close(self):
+        if getattr(self, "_fh", None):
+            self._fh.close()
