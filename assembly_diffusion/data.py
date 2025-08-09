@@ -26,7 +26,9 @@ def _verify_sha256(path: str, expected: str) -> bool:
     return hash_sha256.hexdigest() == expected
 
 
-def download_qm9(data_dir: str = DEFAULT_DATA_DIR, *, url: str = URL, sha256: str = QM9_SHA256) -> None:
+def download_qm9(
+    data_dir: str = DEFAULT_DATA_DIR, *, url: str = URL, sha256: str = QM9_SHA256
+) -> None:
     """Download and extract the QM9 dataset if necessary.
 
     Parameters
@@ -43,7 +45,7 @@ def download_qm9(data_dir: str = DEFAULT_DATA_DIR, *, url: str = URL, sha256: st
     os.makedirs(data_dir, exist_ok=True)
     archive_path = os.path.join(data_dir, "gdb9.tar.gz")
     if not _verify_sha256(archive_path, sha256):
-        print("Downloading QM9 dataset...")
+        print("Downloading QM9 dataset.")
         try:
             urllib.request.urlretrieve(url, archive_path)
         except Exception as e:  # pragma: no cover - network failure
@@ -59,7 +61,9 @@ def download_qm9(data_dir: str = DEFAULT_DATA_DIR, *, url: str = URL, sha256: st
                 print("Extraction complete.")
         except tarfile.TarError as e:  # pragma: no cover - corrupted archive
             os.remove(archive_path)
-            raise RuntimeError("Failed to extract QM9 archive. File may be corrupted and has been removed.") from e
+            raise RuntimeError(
+                "Failed to extract QM9 archive. File may be corrupted and has been removed."
+            ) from e
 
 
 def load_qm9_chon(
@@ -102,7 +106,10 @@ def load_qm9_chon(
         if mol is None:
             continue
         atoms = [a.GetSymbol() for a in mol.GetAtoms()]
-        if all(a in ['C', 'H', 'O', 'N'] for a in atoms) and sum(a != 'H' for a in atoms) <= max_heavy:
+        if (
+            all(a in ["C", "H", "O", "N"] for a in atoms)
+            and sum(a != "H" for a in atoms) <= max_heavy
+        ):
             bonds = torch.zeros((len(atoms), len(atoms)))
             for bond in mol.GetBonds():
                 i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
@@ -135,7 +142,9 @@ def collate_graphs(batch: list[MoleculeGraph]) -> tuple[torch.Tensor, torch.Tens
     atom_tensor = pad_sequence(atom_ids, batch_first=True)
 
     max_atoms = atom_tensor.size(1)
-    bond_tensor = atom_tensor.new_zeros(len(batch), max_atoms, max_atoms, dtype=torch.float)
+    bond_tensor = atom_tensor.new_zeros(
+        len(batch), max_atoms, max_atoms, dtype=torch.float
+    )
     for i, m in enumerate(batch):
         n = m.bonds.size(0)
         bond_tensor[i, :n, :n] = m.bonds.float()

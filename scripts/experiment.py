@@ -60,6 +60,7 @@ def _manifest(outdir, cfg, extra):
 if __name__ == "__main__":
     import argparse, random
     import numpy as np
+
     try:
         import torch
     except Exception:
@@ -68,7 +69,9 @@ if __name__ == "__main__":
     from assembly_diffusion.eval.metrics_writer import write_metrics
 
     p = argparse.ArgumentParser()
-    p.add_argument("--name", required=True, help="Experiment name key in configs/registry.yaml")
+    p.add_argument(
+        "--name", required=True, help="Experiment name key in configs/registry.yaml"
+    )
     p.add_argument("--outdir", default="results", help="Base results dir")
     args = p.parse_args()
 
@@ -87,8 +90,8 @@ if __name__ == "__main__":
         torch.manual_seed(cfg["seed"])
 
     # run the pipeline and always write metrics.json
-    metrics = run_pipeline(cfg, outdir)
+    metrics, flags = run_pipeline(cfg, outdir)
     write_metrics(outdir, **metrics)
 
-    _manifest(outdir, cfg, extra={"run_id": run_id})
+    _manifest(outdir, cfg, extra={"run_id": run_id, "requires_confirmation": flags})
     print(f"[OK] Wrote manifest and artifacts to {outdir}")
