@@ -3,6 +3,8 @@ import time
 import queue
 from pathlib import Path
 
+import pytest
+
 from assembly_diffusion.monitor import RunMonitor
 
 
@@ -95,5 +97,32 @@ def test_drop_counter_and_retry(tmp_path):
     m._emit_dropped()
     assert len(q.items) == 2
     assert q.items[1]["kind"] == "dropped_events" and q.items[1]["count"] == 1
+
+    m.close()
+
+
+def test_eta_ema_smoothing(tmp_path, monkeypatch):
+    import assembly_diffusion.monitor as mmod
+
+    # Fix time during init so last_tick starts at 0.
+    monkeypatch.setattr(mmod.time, "time", lambda: 0.0)
+    m = mmod.RunMonitor(tmp_path, use_tb=False, hb_interval=999, eta_window=2)
+    m._stop.set()
+    m._writer_thread.join()
+    m._hb_thread.join()
+    m._sampler_thread.join()
+
+    def tick_with_dt(step, dt):
+        now = m._last_tick + dt
+        monkeypatch.setattr(mmod.time, "time", lambda: now)
+        m.tick(step=step, total=10)
+
+    tick_with_dt(1, 1)
+    tick_with_dt(2, 100)
+    ema_after_outlier = m._dt_ema
+    assert 1 < ema_after_outlier < 100
+
+    tick_with_dt(3, 1)
+    assert m._dt_ema < ema_after_outlier
 
     m.close()
