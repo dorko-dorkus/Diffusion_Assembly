@@ -89,6 +89,40 @@ def reweight(logits: Tensor, graph, delta_scores: Tensor, gamma: float, clip_ran
     return adjusted
 
 
+def additive_guidance(logits: Tensor, A_hat: Tensor, lam: float) -> Tensor:
+    """Apply additive guidance to action logits.
+
+    Implements ``log p̂(a | s) = log p_θ(a | s) - λ · Â(s ⊕ a)``, where ``Â`` is
+    the approximate assembly index of the successor state.
+
+    Parameters
+    ----------
+    logits:
+        Model logits ``log p_θ(a | s)`` for each action.
+    A_hat:
+        Tensor of ``Â(s ⊕ a)`` values aligned with ``logits``.
+    lam:
+        Guidance weight ``λ``.
+
+    Returns
+    -------
+    torch.Tensor
+        Logits after subtracting ``λ · Â(s ⊕ a)``.
+    """
+
+    if logits.shape != A_hat.shape:
+        raise ValueError("logits and A_hat must share the same shape")
+    return logits - lam * A_hat
+
+
+def linear_lambda_schedule(step: int, total_steps: int, lambda_max: float) -> float:
+    """Linearly ramp ``λ`` from ``0`` to ``lambda_max`` over diffusion steps."""
+
+    if total_steps <= 1:
+        return float(lambda_max)
+    return float(lambda_max) * step / (total_steps - 1)
+
+
 class AssemblyPrior:
     """Simple prior based on an approximate assembly index."""
 
@@ -114,3 +148,12 @@ class AssemblyPrior:
         penalty = self.coeff * (ai - self.target)
         logits[:-1] = logits[:-1] - penalty
         return logits
+
+
+__all__ = [
+    "assembly_guidance_scores",
+    "reweight",
+    "additive_guidance",
+    "linear_lambda_schedule",
+    "AssemblyPrior",
+]
