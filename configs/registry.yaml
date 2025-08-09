@@ -6,7 +6,7 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: false, weight: 0.0, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp02_guided_lambda1:
@@ -16,7 +16,7 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp03_guided_lambda0p5:
@@ -26,7 +26,7 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 0.5, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp04_guided_lambda2:
@@ -36,7 +36,7 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 2.0, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp05_permuted_ai_control:
@@ -46,7 +46,7 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, mode: permuted, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp06_null_ai_control:
@@ -56,5 +56,5 @@ experiments:
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
     ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, mode: null, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
-    metrics: {rdkit: false, novelty: false, uniqueness: false, diversity: internal_tanimoto}
+    metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}

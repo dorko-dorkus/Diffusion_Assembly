@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 
 def write_metrics(outdir: str, **metrics: Any) -> None:
@@ -33,10 +33,11 @@ def write_metrics(outdir: str, **metrics: Any) -> None:
 
     payload: dict[str, Any] = {"schema_version": SCHEMA_VERSION}
     for key, value in metrics.items():
-        # Cast basic numeric types to float for consistency.  Complex structures
-        # such as CI lists are emitted unchanged.
-        if isinstance(value, (int, float)):
+        # Preserve ints (e.g., random seeds) while normalising floats.
+        if isinstance(value, float):
             payload[key] = float(value)
+        elif isinstance(value, int):
+            payload[key] = int(value)
         else:
             payload[key] = value
 
