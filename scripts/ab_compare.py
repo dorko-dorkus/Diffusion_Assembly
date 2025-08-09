@@ -1,0 +1,34 @@
+import json, os, subprocess, sys, tempfile, yaml, shutil
+from pathlib import Path
+
+def run(name):
+    out = subprocess.check_output([sys.executable, "scripts/experiment.py", "--name", name]).decode()
+    print(out)
+    # extract last line path
+    for line in out.splitlines()[::-1]:
+        if "Wrote manifest" in line:
+            return line.split()[-1]
+    raise RuntimeError("Run output dir not found")
+
+if __name__ == "__main__":
+    reg = yaml.safe_load(open("configs/registry.yaml"))
+    A = "exp01_baseline"
+    B = "exp02_guided_lambda1"
+
+    dirA = run(A)
+    dirB = run(B)
+
+    mA = json.load(open(Path(dirA)/"metrics.json"))
+    mB = json.load(open(Path(dirB)/"metrics.json"))
+
+    summary = {
+        "A": A, "B": B,
+        "validity_delta": mB["valid_fraction"] - mA["valid_fraction"],
+        "uniqueness_delta": mB["uniqueness"] - mA["uniqueness"],
+        "diversity_delta": mB["diversity"] - mA["diversity"],
+        "median_AI_delta": mB["median_ai"] - mA["median_ai"],
+    }
+    print(json.dumps(summary, indent=2))
+    with open("results/ab_summary.json","w") as f:
+        json.dump(summary,f,indent=2)
+    print("[OK] Wrote results/ab_summary.json")
