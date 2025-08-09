@@ -5,6 +5,7 @@ import threading
 import queue
 import signal
 import collections
+import sys
 from datetime import datetime
 from typing import Optional
 
@@ -33,6 +34,7 @@ class RunMonitor:
         self.run_dir = run_dir
         self.jsonl_path = os.path.join(run_dir, "events.jsonl")
         self.heartbeat_path = os.path.join(run_dir, "heartbeat.json")
+        self._error_logged = False
         self._q = queue.Queue(maxsize=10000)
         self._stop = threading.Event()
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
@@ -44,7 +46,12 @@ class RunMonitor:
         self._total = None
         self._ckpt_path = None
         self._hb_interval = hb_interval
-        self.tb = SummaryWriter(run_dir) if (use_tb and SummaryWriter) else None
+        self.tb = None
+        if use_tb and SummaryWriter:
+            try:
+                self.tb = SummaryWriter(run_dir)
+            except Exception as e:
+                self._log_error_once("TensorBoard init failed", e)
 
         self._heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop, daemon=True
@@ -89,8 +96,8 @@ class RunMonitor:
         if self.tb:
             try:
                 self.tb.add_scalar(name, value, step)
-            except Exception:
-                pass
+            except Exception as e:
+                self._log_error_once("TensorBoard add_scalar failed", e)
 
     def resources(
         self,
@@ -112,6 +119,22 @@ class RunMonitor:
         self._event("checkpoint", path=path, step=self._step)
 
     # Internals
+    def _log_error_once(self, msg: str, exc: Exception) -> None:
+        if self._error_logged:
+            return
+        err = f"{msg}: {exc}"
+        err_path = os.path.join(self.run_dir, "events_error.log")
+        try:
+            with open(err_path, "a") as ef:
+                ef.write(err + "\n")
+        except Exception:
+            pass
+        try:
+            print(err, file=sys.stderr)
+        except Exception:
+            pass
+        self._error_logged = True
+
     def _event(self, kind: str, **payload) -> None:
         evt = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -125,7 +148,12 @@ class RunMonitor:
             pass
 
     def _writer_loop(self) -> None:
-        with open(self.jsonl_path, "a", buffering=1) as f:
+        try:
+            f = open(self.jsonl_path, "a", buffering=1)
+        except Exception as e:
+            self._log_error_once("event writer failed to open", e)
+            return
+        with f:
             while not self._stop.is_set() or not self._q.empty():
                 try:
                     evt = self._q.get(timeout=0.25)
@@ -133,8 +161,8 @@ class RunMonitor:
                     continue
                 try:
                     f.write(json.dumps(evt) + "\n")
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._log_error_once("event write failed", e)
 
     def _write_heartbeat(self) -> None:
         hb = {
@@ -145,8 +173,8 @@ class RunMonitor:
         try:
             with open(self.heartbeat_path, "w") as f:
                 json.dump(hb, f)
-        except Exception:
-            pass
+        except Exception as e:
+            self._log_error_once("heartbeat write failed", e)
 
     def _heartbeat_loop(self) -> None:
         while not self._stop.is_set():
