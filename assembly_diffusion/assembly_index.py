@@ -53,3 +53,20 @@ class AssemblyIndex:
     @staticmethod
     def D_min_T(G, N_limit: int = 9) -> int:
         return TreeGrammar.D_min_exact(G, N_limit=N_limit)
+
+    @staticmethod
+    def A_star_exact_or_none(graph):
+        """Return exact A* if ``graph`` is acyclic; otherwise ``None``."""
+
+        if hasattr(graph, "is_acyclic") and graph.is_acyclic():
+            return graph.num_edges()
+        return None
+
+    @staticmethod
+    def A_lower_bound(graph):
+        """Lower bound on assembly index via a cycle estimate."""
+
+        E = graph.num_edges()
+        V = graph.num_nodes()
+        mu = max(0, E - V + graph.num_connected_components())
+        return E + mu

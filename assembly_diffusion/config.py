@@ -21,6 +21,16 @@ class TrainConfig:
     guid_mode: str
 
 
+@dataclass
+class SamplingConfig:
+    """Configuration options for sampling with guidance."""
+
+    guidance_gamma: float = 0.0
+    guidance_mode: str = "A_lower"
+    max_steps: int = 64
+    delta_valid_tol: float = 0.05
+
+
 def load_config(path: str | Path, variant: str) -> TrainConfig:
     """Load a YAML configuration file and return merged settings.
 

@@ -1,40 +1,53 @@
 from __future__ import annotations
 import itertools
-import random
+import torch
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple
 import networkx as nx
+
+device = torch.device("cuda" if torch.cuda.is_available() else torch.device("cpu"))
+
 
 @dataclass
 class TreeGrammar:
     N_max: int = 10
 
-    def sample_target_N(self, guided: bool = False, gamma: float = 0.0, rng: random.Random | None = None) -> int:
-        """Sample target number of nodes.
-        Baseline: uniform over {2..N_max}. Guided: softmax tilt toward larger N via exp(gamma * N).
+    def sample_target_N(
+        self,
+        guided: bool = False,
+        gamma: float = 0.0,
+        generator: torch.Generator | None = None,
+    ) -> int:
+        """Sample the target number of nodes using ``torch`` operations.
+
+        Baseline is uniform over ``{2..N_max}``; guided sampling tilts toward
+        larger ``N`` via ``exp(gamma * N)``.
         """
-        rng = rng or random
+
         if not guided or gamma == 0.0:
-            return rng.randint(2, self.N_max)
-        Ns = list(range(2, self.N_max + 1))
-        weights = [pow(2.718281828, gamma * n) for n in Ns]
-        total = sum(weights)
-        r = rng.random() * total
-        acc = 0.0
-        for n, w in zip(Ns, weights):
-            acc += w
-            if r <= acc:
-                return n
-        return self.N_max
+            return int(
+                torch.randint(2, self.N_max + 1, (1,), device=device, generator=generator).item()
+            )
+        Ns = torch.arange(2, self.N_max + 1, device=device, dtype=torch.float)
+        weights = torch.exp(gamma * Ns)
+        idx = torch.multinomial(weights, num_samples=1, generator=generator).item()
+        return int(Ns[idx].item())
 
     @staticmethod
-    def sample_trajectory(N: int, rng: random.Random | None = None) -> List[Tuple[int, int]]:
-        """Path-uniform minimal attachment sequences: start from node 0, at step t attach new node t to a uniformly random existing node in {0..t-1}. Returns edge list.
+    def sample_trajectory(
+        N: int, generator: torch.Generator | None = None
+    ) -> List[Tuple[int, int]]:
+        """Path-uniform minimal attachment sequences using ``torch``.
+
+        Starts from node 0; at step ``t`` attach node ``t`` to a uniformly
+        sampled existing node in ``{0..t-1}``.
         """
-        rng = rng or random
+
         edges: List[Tuple[int, int]] = []
         for t in range(1, N):
-            parent = rng.randint(0, t - 1)
+            parent = int(
+                torch.randint(0, t, (1,), device=device, generator=generator).item()
+            )
             edges.append((parent, t))
         return edges
 
