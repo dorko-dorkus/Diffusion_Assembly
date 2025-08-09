@@ -6,6 +6,9 @@ import queue
 import signal
 import sys
 import hashlib
+import random
+import subprocess
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -46,6 +49,9 @@ class RunMonitor:
         use_tb: bool = True,
         hb_interval: float = 30.0,
         eta_window: int = 100,
+        *,
+        config: object | None = None,
+        dataset_path: str | None = None,
     ):
         os.makedirs(run_dir, exist_ok=True)
         self.run_dir = run_dir
@@ -74,6 +80,10 @@ class RunMonitor:
                 self.tb = SummaryWriter(run_dir)
             except Exception as e:
                 self._log_error_once("TensorBoard init failed", e)
+
+        # Emit run header before background threads that may produce events.
+        self.run_start(config=config, dataset_path=dataset_path)
+
         # Dedicated heartbeat thread for liveness reporting.
         self._hb_thread = threading.Thread(
             target=self._heartbeat_loop, daemon=True
@@ -117,6 +127,109 @@ class RunMonitor:
                 pass
 
     # Public API
+    def run_start(self, config: object | None = None, dataset_path: str | None = None) -> None:
+        seeds: dict[str, int] = {}
+        try:
+            seeds["python"] = int(random.getstate()[1][0])
+        except Exception:
+            pass
+        try:
+            import numpy as np  # type: ignore
+
+            seeds["numpy"] = int(np.random.get_state()[1][0])
+        except Exception:
+            pass
+        try:
+            import torch  # type: ignore
+
+            seeds["torch"] = int(torch.initial_seed())
+        except Exception:
+            pass
+
+        git_commit = None
+        git_dirty = None
+        try:
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True
+            ).strip()
+            dirty = subprocess.check_output(
+                ["git", "status", "--porcelain"], text=True
+            )
+            git_dirty = bool(dirty.strip())
+        except Exception:
+            pass
+
+        lib_versions: dict[str, str] = {"python": sys.version.split()[0]}
+        try:
+            import torch  # type: ignore
+
+            lib_versions["torch"] = torch.__version__
+            cuda_version = torch.version.cuda
+        except Exception:
+            cuda_version = None
+        try:
+            import numpy as np  # type: ignore
+
+            lib_versions["numpy"] = np.__version__
+        except Exception:
+            pass
+        if psutil:
+            try:
+                lib_versions["psutil"] = psutil.__version__  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        if pynvml:
+            try:  # pragma: no cover - GPU-specific
+                lib_versions["pynvml"] = pynvml.__version__  # type: ignore[attr-defined]
+                driver = pynvml.nvmlSystemGetDriverVersion()
+                cuda_driver = driver.decode() if isinstance(driver, bytes) else driver
+            except Exception:
+                cuda_driver = None
+        else:
+            cuda_driver = None
+
+        rdkit_version = None
+        try:
+            import rdkit  # type: ignore
+
+            rdkit_version = rdkit.__version__
+        except Exception:
+            pass
+
+        dataset_checksum = None
+        if dataset_path:
+            try:
+                h = hashlib.sha256()
+                with open(dataset_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+                dataset_checksum = h.hexdigest()
+            except Exception as e:
+                self._log_error_once("dataset checksum failed", e)
+
+        cfg_payload = None
+        if config is not None:
+            try:
+                if is_dataclass(config):
+                    cfg_payload = asdict(config)
+                else:
+                    cfg_payload = config
+            except Exception:
+                cfg_payload = str(config)
+
+        self._event(
+            "run_start",
+            config=cfg_payload,
+            seeds=seeds or None,
+            git_commit=git_commit,
+            git_dirty=git_dirty,
+            library_versions=lib_versions or None,
+            cuda_version=cuda_version,
+            cuda_driver=cuda_driver,
+            rdkit_version=rdkit_version,
+            dataset_checksum=dataset_checksum,
+        )
+
     def tick(self, step: int, total: Optional[int] = None) -> None:
         now = time.time()
         dt = now - self._last_tick

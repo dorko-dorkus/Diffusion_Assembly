@@ -23,6 +23,7 @@ from pathlib import Path
 import yaml
 import torch
 from datetime import datetime
+from dataclasses import asdict
 
 # Use GPU when available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,7 +90,12 @@ def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> No
             optimiser = opt_cls(policy.parameters(), lr=cfg.lr)
 
             run_dir = f"runs/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            monitor = RunMonitor(run_dir, use_tb=True)
+            monitor = RunMonitor(
+                run_dir,
+                use_tb=True,
+                config=asdict(cfg),
+                dataset_path=cfg.dataset,
+            )
 
             epochs = 1 if smoke else cfg.epochs
             for epoch in range(epochs):
