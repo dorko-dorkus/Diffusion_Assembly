@@ -8,7 +8,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 def _git_hash():
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
     except Exception:
         return "unknown"
 
