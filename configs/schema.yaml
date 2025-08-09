@@ -1,0 +1,31 @@
+# Documented schema for experiments
+name: str
+description: str
+dataset:
+  name: "qm9_chon"
+  split: "test|valid|train|all"
+  limit: int  # 0 = no limit
+seed: int
+model:
+  ckpt: str | null
+  steps: int
+  guidance:
+    enabled: bool
+    weight: float # λ in [0, 5] sensible range
+    policy: "additive|multiplicative"
+ai:
+  scorer: "exact|surrogate"
+  surrogate_ckpt: str | null
+  grammar: "default"
+sampler:
+  n_samples: int
+  batch_size: int
+metrics:
+  rdkit: true
+  novelty: true
+  uniqueness: true
+  diversity: "internal_tanimoto"
+artifacts:
+  save_smiles: true
+  save_sdf: false
+  save_ai_scores: true
