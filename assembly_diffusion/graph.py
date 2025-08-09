@@ -6,7 +6,7 @@ optionally on :mod:`rdkit` for validation and SMILES generation.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -25,6 +25,9 @@ except ImportError:  # pragma: no cover - handled at runtime
 VALENCE_CAP = {"C": 4, "N": 3, "O": 2, "H": 1}
 # Allowed atom types for stochastic insertion moves.
 ALLOWED_ATOMS = list(VALENCE_CAP.keys())
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from .edit_vocab import Edit
 
 
 @dataclass
@@ -226,3 +229,47 @@ class MoleculeGraph:
         if Chem is None:
             raise ImportError("RDKit is required to generate canonical SMILES")
         return Chem.MolToSmiles(self.to_rdkit(), canonical=True)
+
+
+def is_edit_legal(edit: "Edit", g: MoleculeGraph) -> bool:
+    """Return ``True`` if ``edit`` is legal under the molecular grammar.
+
+    The grammar is defined by :data:`assembly_diffusion.mask.GRAMMAR_SPEC` and
+    documented in ``docs/grammar.md``.
+    """
+
+    from .mask import GRAMMAR_SPEC  # local import to avoid circular dependency
+
+    if edit.is_stop:
+        return True
+    if edit.i is None or edit.j is None or edit.b is None:
+        return False
+    n = len(g.atoms)
+    if not (0 <= edit.i < n and 0 <= edit.j < n and edit.i < edit.j):
+        return False
+    if edit.b not in GRAMMAR_SPEC["bond_orders"]:
+        return False
+
+    current = int(g.bonds[edit.i, edit.j])
+    deg_i = g.degree(edit.i) - current + edit.b
+    deg_j = g.degree(edit.j) - current + edit.b
+    max_val = GRAMMAR_SPEC["max_valence"]
+    if deg_i > max_val.get(g.atoms[edit.i], 4):
+        return False
+    if deg_j > max_val.get(g.atoms[edit.j], 4):
+        return False
+    return True
+
+
+def apply_edit(edit: "Edit", g: MoleculeGraph) -> MoleculeGraph:
+    """Apply ``edit`` to ``g`` if it is legal under the grammar.
+
+    An ``AssertionError`` is raised when the edit violates the grammar; see
+    ``docs/grammar.md`` for the specification.
+    """
+
+    if not is_edit_legal(edit, g):
+        raise AssertionError(f"Illegal edit {edit}")
+    if edit.is_stop:
+        return g
+    return g.apply_edit(edit.i, edit.j, edit.b)

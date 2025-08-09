@@ -63,6 +63,12 @@ prints a canonical SMILES string of the generated molecule. Additional utilities
 for training and evaluation are available in the `assembly_diffusion` module and
 can serve as starting points for custom experiments.
 
+## Assumptions and Guarantees
+
+The codebase assumes a minimal molecular grammar governing which atoms,
+bond orders and valence configurations are permitted.  The full specification is
+documented in [docs/grammar.md](docs/grammar.md).
+
 ## Testing
 
 Run the test suite (if present) with:
