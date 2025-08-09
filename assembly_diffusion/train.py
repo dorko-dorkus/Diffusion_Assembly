@@ -4,17 +4,6 @@ import logging
 import time
 import torch
 
-try:
-    import psutil
-except Exception:
-    psutil = None
-
-try:
-    import pynvml
-    pynvml.nvmlInit()
-except Exception:
-    pynvml = None
-
 from .forward import ForwardKernel
 from .policy import ReversePolicy
 from .mask import FeasibilityMask
@@ -71,7 +60,6 @@ def train_epoch(
     device = next(policy.parameters()).device
 
     total_steps = len(loader)
-    last_res_log = time.time()
     step_in_epoch = 0
     last_poke_check = time.time()
 
@@ -132,26 +120,6 @@ def train_epoch(
                 monitor.scalar("loss/train", float(batch_loss.detach().cpu()), step=step_in_epoch)
             except Exception:
                 pass
-
-        # Lightweight resource snapshot roughly every 30 seconds
-        now = time.time()
-        if monitor and (now - last_res_log) > 30:
-            cpu = psutil.cpu_percent(interval=None) if psutil else None
-            ram = (psutil.virtual_memory().used / 1e9) if psutil else None
-            gpu_util = vram = None
-            if pynvml:
-                try:
-                    dev = pynvml.nvmlDeviceGetHandleByIndex(0)
-                    util = pynvml.nvmlDeviceGetUtilizationRates(dev)
-                    mem = pynvml.nvmlDeviceGetMemoryInfo(dev)
-                    gpu_util = float(util.gpu)
-                    vram = float(mem.used / 1e9)
-                except Exception:
-                    pass
-            monitor.resources(
-                cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
-            )
-            last_res_log = now
 
         if monitor and (time.time() - last_poke_check) > 5:
             ckpt_req, dump_req = monitor.poll()
