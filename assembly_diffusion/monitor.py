@@ -10,9 +10,10 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-import logging
 
-logger = logging.getLogger(__name__)
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
 
 try:
     from torch.utils.tensorboard import SummaryWriter

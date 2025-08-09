@@ -1,13 +1,12 @@
 import argparse
 from typing import List, Tuple
 
-import argparse
-import logging
 import torch
 
 from .config import SamplingConfig
+from .logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PolicyGrammarAdapter:

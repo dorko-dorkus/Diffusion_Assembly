@@ -2,8 +2,6 @@ import hashlib
 import os
 import tarfile
 import urllib.request
-import hashlib
-import logging
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -11,8 +9,9 @@ from torch.utils.data import DataLoader, Dataset
 
 from .graph import MoleculeGraph
 from .backbone import ATOM_MAP
+from .logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 URL = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/gdb9.tar.gz"
 QM9_SHA256 = "45255048ac6d83ea4b923ecdf7d6fb6dc62bfec5e80fbc5bcfd93a62157a31db"

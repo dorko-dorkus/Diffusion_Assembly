@@ -1,6 +1,5 @@
 import os
 import random
-import logging
 import time
 from typing import Union
 
@@ -12,9 +11,10 @@ from .mask import FeasibilityMask
 from .graph import MoleculeGraph
 from .backbone import ATOM_TYPES
 from .monitor import RunMonitor
+from .logging_config import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph) -> Union[str, tuple[int, int, int]]:

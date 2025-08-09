@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Iterable, List, Tuple, Optional, Dict, Any
 
 import numpy as np
-import logging
+
+from .logging_config import get_logger
 
 # Try RDKit early to fail fast when metrics require it
 try:
@@ -44,7 +45,7 @@ except Exception:
     AssemblyMC = None
     MoleculeGraph = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _require_rdkit(cfg: Dict[str, Any]) -> None:
