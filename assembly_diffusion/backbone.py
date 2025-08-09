@@ -29,7 +29,7 @@ class GraphConv(nn.Module):
 
 
 def time_embedding(t: int, dim: int) -> torch.Tensor:
-    """Sinusoidal time embedding :math:`\psi(t)` of dimension ``dim``."""
+    r"""Sinusoidal time embedding :math:`\psi(t)` of dimension ``dim``."""
 
     half = dim // 2
     freqs = torch.exp(
