@@ -60,6 +60,7 @@ def test_drop_counter_and_retry(tmp_path):
     # stop background threads to control queue behavior
     m._stop.set()
     m._writer_thread.join()
+    m._hb_thread.join()
     m._sampler_thread.join()
 
     class DummyQ:
