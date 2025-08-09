@@ -8,10 +8,26 @@ from assembly_diffusion.pipeline import run_pipeline
 
 
 def _git_hash():
+    """Return the current git commit hash or ``"unknown"``.
+
+    When the project is executed from a zip archive the ``.git`` directory is
+    absent and invoking ``git`` would emit an error message.  To keep logs clean
+    we first check for ``.git`` and only then attempt to call ``git`` while
+    silencing any stderr output.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    if not (repo_root / ".git").exists():
+        return "unknown"
+
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-        ).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, cwd=repo_root
+            )
+            .decode()
+            .strip()
+        )
     except Exception:
         return "unknown"
 
