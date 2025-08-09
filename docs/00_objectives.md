@@ -65,6 +65,5 @@ predicted assembly index than unguided baseline (Δmedian_AI < 0 with p <
 H3 (Diversity): AI guidance does not reduce uniqueness or internal
 diversity beyond 5% absolute.
 
-All claims are conditional on grammar G and primitives P used for AI
-computation (declared in docs/01_grammar.md).
+All claims are conditional on the explicit molecular grammar G and primitive set P defined in docs/01_grammar.md; changing them would modify the objective.
 
