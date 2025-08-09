@@ -46,6 +46,8 @@ class Sampler:
                 delta = guidance(logits, x, t, mask)
                 logits = reweight(logits, x, delta, gamma, clip_range)
             probs = torch.softmax(logits, dim=0)
+            if not torch.isfinite(probs).any():
+                return x
             dist = Categorical(probs)
             idx = dist.sample().item()
             action = self.policy._actions[idx]
@@ -82,6 +84,8 @@ class Sampler:
                 delta = guidance(logits, x, t, mask)
                 logits = reweight(logits, x, delta, gamma, clip_range)
             probs = torch.softmax(logits, dim=0)
+            if not torch.isfinite(probs).any():
+                break
             dist = Categorical(probs)
             idx = dist.sample().item()
             action = self.policy._actions[idx]
