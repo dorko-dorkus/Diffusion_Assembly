@@ -15,6 +15,23 @@ try:
 except Exception:
     SummaryWriter = None
 
+# Optional resource monitoring dependencies.  These are best-effort and the
+# monitor will operate without them if unavailable.
+try:
+    import psutil  # type: ignore
+except Exception:  # pragma: no cover - dependency not installed
+    psutil = None  # type: ignore
+
+try:
+    import pynvml  # type: ignore
+
+    try:
+        pynvml.nvmlInit()
+    except Exception:  # pragma: no cover - GPU may be absent
+        pynvml = None  # type: ignore
+except Exception:  # pragma: no cover - dependency not installed
+    pynvml = None  # type: ignore
+
 
 class RunMonitor:
     """Non-blocking run monitor.
@@ -53,11 +70,13 @@ class RunMonitor:
                 self.tb = SummaryWriter(run_dir)
             except Exception as e:
                 self._log_error_once("TensorBoard init failed", e)
-
-        self._heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop, daemon=True
+        # Background sampler thread handles heartbeat updates and optional
+        # resource snapshots.  This keeps liveness reporting out of the main
+        # training loop and avoids duplicated boilerplate in callers.
+        self._sampler_thread = threading.Thread(
+            target=self._sampler_loop, daemon=True
         )
-        self._heartbeat_thread.start()
+        self._sampler_thread.start()
 
         # Sentinel files for cross-platform "poke" mechanism.
         self._dump_sentinel = os.path.join(run_dir, "dump")
@@ -73,11 +92,17 @@ class RunMonitor:
     def close(self) -> None:
         self._stop.set()
         self._writer_thread.join(timeout=5)
-        self._heartbeat_thread.join(timeout=5)
+        self._sampler_thread.join(timeout=5)
         if self.tb:
             try:
                 self.tb.flush()
                 self.tb.close()
+            except Exception:
+                pass
+        # Gracefully shut down NVML if it was initialized.
+        if pynvml:
+            try:  # pragma: no cover - GPU-specific
+                pynvml.nvmlShutdown()
             except Exception:
                 pass
 
@@ -261,9 +286,30 @@ class RunMonitor:
         except Exception as e:
             self._log_error_once("heartbeat write failed", e)
 
-    def _heartbeat_loop(self) -> None:
+    def _sample_resources(self) -> tuple[float | None, float | None, float | None, float | None]:
+        """Best-effort CPU/GPU resource snapshot."""
+        cpu = psutil.cpu_percent(interval=None) if psutil else None
+        ram = (psutil.virtual_memory().used / 1e9) if psutil else None
+        gpu_util = vram = None
+        if pynvml:
+            try:  # pragma: no cover - GPU-specific
+                dev = pynvml.nvmlDeviceGetHandleByIndex(0)
+                util = pynvml.nvmlDeviceGetUtilizationRates(dev)
+                mem = pynvml.nvmlDeviceGetMemoryInfo(dev)
+                gpu_util = float(util.gpu)
+                vram = float(mem.used / 1e9)
+            except Exception:
+                pass
+        return cpu, ram, vram, gpu_util
+
+    def _sampler_loop(self) -> None:
         while not self._stop.is_set():
             self._write_heartbeat()
+            cpu, ram, vram, gpu_util = self._sample_resources()
+            if any(v is not None for v in (cpu, ram, vram, gpu_util)):
+                self.resources(
+                    cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
+                )
             self._stop.wait(self._hb_interval)
 
     def _sig_dump(self, *_):
