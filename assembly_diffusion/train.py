@@ -73,8 +73,9 @@ def train_epoch(
     total_steps = len(loader)
     last_res_log = time.time()
     step_in_epoch = 0
+    last_poke_check = time.time()
 
-    if ckpt_interval:
+    if ckpt_interval or monitor:
         os.makedirs("checkpoints", exist_ok=True)
 
     for i, (atom_tensor, bond_tensor) in enumerate(loader):
@@ -151,6 +152,26 @@ def train_epoch(
                 cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
             )
             last_res_log = now
+
+        if monitor and (time.time() - last_poke_check) > 5:
+            ckpt_req, dump_req = monitor.poll()
+            last_poke_check = time.time()
+            if dump_req:
+                monitor.tick(step=step_in_epoch, total=total_steps)
+            if ckpt_req:
+                tmp = f"checkpoints/epoch{epoch}_step{step_in_epoch}.tmp"
+                final = f"checkpoints/epoch{epoch}_step{step_in_epoch}.pt"
+                torch.save(
+                    {
+                        "policy": policy.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "epoch": epoch,
+                        "step_in_epoch": step_in_epoch,
+                    },
+                    tmp,
+                )
+                os.replace(tmp, final)
+                monitor.set_checkpoint(final)
 
         # Console status line
         if (step_in_epoch % 10) == 0:
