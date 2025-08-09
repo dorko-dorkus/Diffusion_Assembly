@@ -28,6 +28,33 @@ if __name__ == "__main__":
         "diversity_delta": mB["diversity"] - mA["diversity"],
         "median_AI_delta": mB["median_ai"] - mA["median_ai"],
     }
+
+    rows = []
+    metrics = [
+        ("valid_fraction", "Validity"),
+        ("uniqueness", "Uniqueness"),
+        ("diversity", "Diversity"),
+        ("median_ai", "Median AI"),
+    ]
+    for key, label in metrics:
+        delta = mB[key] - mA[key]
+        ciA = mA.get(f"{key}_ci")
+        ciB = mB.get(f"{key}_ci")
+        if ciA and ciB:
+            delta_ci = [ciB[0] - ciA[1], ciB[1] - ciA[0]]
+        else:
+            delta_ci = None
+        rows.append((label, delta, delta_ci))
+
+    print("| Metric | Δ(B−A) | 95% CI |")
+    print("|---|---|---|")
+    for label, delta, ci in rows:
+        if ci:
+            ci_str = f"[{ci[0]:.3f}, {ci[1]:.3f}]"
+        else:
+            ci_str = "N/A"
+        print(f"| {label} | {delta:.3f} | {ci_str} |")
+
     print(json.dumps(summary, indent=2))
     with open("results/ab_summary.json","w") as f:
         json.dump(summary,f,indent=2)
