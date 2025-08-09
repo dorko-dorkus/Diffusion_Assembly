@@ -63,7 +63,9 @@ def download_qm9(data_dir: str = DEFAULT_DATA_DIR, *, url: str = URL, sha256: st
             raise RuntimeError("Failed to extract QM9 archive. File may be corrupted and has been removed.") from e
 
 
-def load_qm9_chon(max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR):
+def load_qm9_chon(
+    max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR
+) -> list[MoleculeGraph]:
     """Load molecules from the QM9 dataset restricted to C/H/O/N.
 
     Parameters
@@ -72,6 +74,11 @@ def load_qm9_chon(max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR):
         Maximum number of non-hydrogen atoms allowed in a molecule.
     data_dir:
         Location of the QM9 data directory.
+
+    Returns
+    -------
+    list[MoleculeGraph]
+        Filtered molecules represented as :class:`MoleculeGraph` objects.
     """
 
     try:
@@ -119,7 +126,7 @@ class QM9CHON_Dataset(Dataset):
         return self.data[idx]
 
 
-def collate_graphs(batch):
+def collate_graphs(batch: list[MoleculeGraph]) -> tuple[torch.Tensor, torch.Tensor]:
     """Pack a list of :class:`MoleculeGraph` objects into padded tensors."""
 
     atom_ids = [
@@ -137,7 +144,9 @@ def collate_graphs(batch):
     return atom_tensor, bond_tensor
 
 
-def get_dataloader(batch_size: int = 32, max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR):
+def get_dataloader(
+    batch_size: int = 32, max_heavy: int = 12, data_dir: str = DEFAULT_DATA_DIR
+) -> DataLoader:
     """Return a dataloader over the filtered QM9 molecules."""
 
     dataset = QM9CHON_Dataset(max_heavy, data_dir)
