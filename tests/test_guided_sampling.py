@@ -32,7 +32,7 @@ class ToyGrammar:
         return ToyState(s.v + (a + 1))
 
     def is_terminal(self, s):
-        return s.v >= 3
+        return False
 
     def heuristic_A(self, s):
         return s.num_edges()
@@ -52,15 +52,16 @@ class Cfg:
 
 
 def test_guidance_pushes_up_A():
-    torch.manual_seed(0)
     toyG = ToyGrammar()
     pol = ToyPolicy()
     init = [ToyState(0)] * 128
 
+    torch.manual_seed(0)
     final_b, _ = sample_with_guidance(pol, toyG, init, Cfg)
     A_b = sum(s.num_edges() for s in final_b) / len(final_b)
 
     Cfg.guidance_gamma = 0.8
+    torch.manual_seed(0)
     final_g, _ = sample_with_guidance(pol, toyG, init, Cfg)
     A_g = sum(s.num_edges() for s in final_g) / len(final_g)
     assert A_g >= A_b
