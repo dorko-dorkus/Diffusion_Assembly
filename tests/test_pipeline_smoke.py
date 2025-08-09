@@ -11,7 +11,18 @@ def test_pipeline_runs():
     assert len(results) >= 2
     for run_dir in results[-2:]:
         m = json.load(open(run_dir / "metrics.json"))
-        for k in ["valid_fraction", "uniqueness", "diversity", "novelty", "median_ai"]:
+        for k in [
+            "valid_fraction",
+            "uniqueness",
+            "diversity",
+            "novelty",
+            "qed",
+            "sa",
+            "median_ai",
+            "seed",
+            "config",
+            "schema_version",
+        ]:
             assert k in m
         # calibration curve should be present
         cal_path = run_dir / "ai_calibration.csv"

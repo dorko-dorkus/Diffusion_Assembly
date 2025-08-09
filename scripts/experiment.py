@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     # run the pipeline and always write metrics.json
     metrics, flags = run_pipeline(cfg, outdir)
-    write_metrics(outdir, **metrics)
+    write_metrics(outdir, seed=int(cfg["seed"]), config=cfg, **metrics)
 
     _manifest(outdir, cfg, extra={"run_id": run_id, "requires_confirmation": flags})
     print(f"[OK] Wrote manifest and artifacts to {outdir}")
