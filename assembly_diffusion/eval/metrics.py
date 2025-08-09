@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+SCHEMA_VERSION = "1.0.0"
+
 from typing import Iterable, Sequence, Set, List, Any, Tuple
 
 try:  # pragma: no cover - RDKit optional
