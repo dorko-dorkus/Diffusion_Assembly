@@ -1,27 +1,16 @@
 name: CI
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
+on: { push: { branches: [ main ] }, pull_request: { branches: [ main ] } }
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
         with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          pip install --no-cache-dir -r env.lock
-          pip install --no-cache-dir -e .
-      - name: Run smoke tests
-        run: pytest -q -k end_to_end
-      - name: Reproducibility and integrity checks
-        run: |
-          python reproduce.py --smoke
-          python check_integrity.py
+          context: .
+          push: false
+          tags: local/assembly:ci
+          load: true
+      - name: Run tests in container
+        run: docker run --rm local/assembly:ci
