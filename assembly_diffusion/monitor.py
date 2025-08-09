@@ -166,6 +166,19 @@ class RunMonitor:
             pass
         self._error_logged = True
 
+    def _roll_existing_jsonl(self, today: str) -> None:
+        """Move leftover logs from previous days to a dated file."""
+        if not os.path.exists(self.jsonl_path):
+            return
+        try:
+            mtime = datetime.utcfromtimestamp(os.path.getmtime(self.jsonl_path))
+            file_day = mtime.strftime("%Y%m%d")
+            if file_day != today:
+                rolled = os.path.join(self.run_dir, f"events-{file_day}.jsonl")
+                os.replace(self.jsonl_path, rolled)
+        except Exception as e:
+            self._log_error_once("event log rotation failed", e)
+
     def _event(self, kind: str, **payload) -> None:
         evt = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -179,21 +192,40 @@ class RunMonitor:
             pass
 
     def _writer_loop(self) -> None:
+        current_day = datetime.utcnow().strftime("%Y%m%d")
+        self._roll_existing_jsonl(current_day)
         try:
             f = open(self.jsonl_path, "a", buffering=1)
         except Exception as e:
             self._log_error_once("event writer failed to open", e)
             return
-        with f:
-            while not self._stop.is_set() or not self._q.empty():
+        while not self._stop.is_set() or not self._q.empty():
+            today = datetime.utcnow().strftime("%Y%m%d")
+            if today != current_day:
                 try:
-                    evt = self._q.get(timeout=0.25)
-                except queue.Empty:
-                    continue
-                try:
-                    f.write(json.dumps(evt) + "\n")
+                    f.close()
+                    rolled_path = os.path.join(self.run_dir, f"events-{current_day}.jsonl")
+                    os.replace(self.jsonl_path, rolled_path)
                 except Exception as e:
-                    self._log_error_once("event write failed", e)
+                    self._log_error_once("event log rotation failed", e)
+                try:
+                    f = open(self.jsonl_path, "a", buffering=1)
+                    current_day = today
+                except Exception as e:
+                    self._log_error_once("event writer failed to open", e)
+                    break
+            try:
+                evt = self._q.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            try:
+                f.write(json.dumps(evt) + "\n")
+            except Exception as e:
+                self._log_error_once("event write failed", e)
+        try:
+            f.close()
+        except Exception:
+            pass
 
     def _write_heartbeat(self) -> None:
         hb = {
