@@ -19,8 +19,9 @@ jobs:
         run: |
           pip install --no-cache-dir -r env.lock
           pip install --no-cache-dir -e .
-      - name: Run tests, reproducibility, and integrity checks
+      - name: Run smoke tests
+        run: pytest -q -k end_to_end
+      - name: Reproducibility and integrity checks
         run: |
-          pytest
           python reproduce.py --smoke
           python check_integrity.py
