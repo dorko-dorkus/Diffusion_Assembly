@@ -126,3 +126,19 @@ def test_eta_ema_smoothing(tmp_path, monkeypatch):
     assert m._dt_ema < ema_after_outlier
 
     m.close()
+
+
+def test_run_start_event(tmp_path):
+    data = b"dataset"
+    ds = tmp_path / "ds.csv"
+    ds.write_bytes(data)
+    m = RunMonitor(tmp_path, use_tb=False, hb_interval=0.1, config={"foo": "bar"}, dataset_path=str(ds))
+    m.close()
+    events = [json.loads(l) for l in (tmp_path / "events.jsonl").read_text().splitlines()]
+    evt = next(e for e in events if e["kind"] == "run_start")
+    assert evt["config"]["foo"] == "bar"
+    import hashlib
+
+    assert evt["dataset_checksum"] == hashlib.sha256(data).hexdigest()
+    assert "git_commit" in evt and "seeds" in evt
+
