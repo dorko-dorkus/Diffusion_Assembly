@@ -10,7 +10,7 @@ from assembly_diffusion.monitor import RunMonitor
 
 
 def test_heartbeat_thread_runs(tmp_path):
-    m = RunMonitor(tmp_path, use_tb=False, hb_interval=0.1)
+    m = RunMonitor(tmp_path, use_tb=False, hb_interval=0.1, config={"a": 1})
     # Allow heartbeat thread to emit at least once
     time.sleep(0.25)
     m.close()
@@ -18,7 +18,9 @@ def test_heartbeat_thread_runs(tmp_path):
     assert hb_file.exists()
     with hb_file.open() as f:
         hb = json.load(f)
-    assert "time" in hb and "step" in hb
+    assert "time" in hb and "step" in hb and "eta_seconds" in hb
+    assert hb["config"] == {"a": 1}
+    assert isinstance(hb["git_hash"], str)
 
 
 def test_sentinel_poll(tmp_path):
@@ -34,15 +36,19 @@ def test_checkpoint_event_has_metadata(tmp_path):
     ckpt = tmp_path / "ckpt.bin"
     data = b"checkpoint-data"
     ckpt.write_bytes(data)
-    m = RunMonitor(tmp_path, use_tb=False)
+    m = RunMonitor(tmp_path, use_tb=False, config={"b": 2})
     m.set_checkpoint(str(ckpt))
     m.close()
     events = [json.loads(l) for l in (tmp_path / "events.jsonl").read_text().splitlines()]
     evt = next(e for e in events if e["kind"] == "checkpoint")
     assert evt["path"] == str(ckpt)
     assert evt["size_bytes"] == len(data)
+    assert evt["config"] == {"b": 2}
     import hashlib
     assert evt["checksum"] == hashlib.sha256(data).hexdigest()
+    meta = json.loads((tmp_path / "ckpt.bin.meta.json").read_text())
+    assert meta["git_hash"] == evt["git_hash"]
+    assert meta["config"] == {"b": 2}
 
 
 def test_resume_event(tmp_path):
@@ -162,3 +168,19 @@ def test_daily_rotation_symlink(tmp_path, monkeypatch):
     assert second.exists()
     assert link.is_symlink()
     assert os.path.samefile(link, second)
+
+
+def test_sample_smiles_event_and_file(tmp_path):
+    m = RunMonitor(tmp_path, use_tb=False, hb_interval=999, config={"c": 3})
+    m.sample_smiles(["C", "O"], step=7)
+    m.close()
+    events = [json.loads(l) for l in (tmp_path / "events.jsonl").read_text().splitlines()]
+    evt = next(e for e in events if e["kind"] == "sample_smiles")
+    assert evt["smiles"] == ["C", "O"] and evt["step"] == 7
+    assert evt["config"] == {"c": 3}
+    smi_file = tmp_path / "smiles_step00000007.smi"
+    assert smi_file.exists()
+    content = smi_file.read_text().splitlines()
+    assert any("git_hash" in line for line in content[:2])
+    assert any("config" in line for line in content[:2])
+    assert content[-2:] == ["C", "O"]
