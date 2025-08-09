@@ -1,10 +1,14 @@
 from __future__ import annotations
 import argparse
+import argparse
 import numpy as np
 import pandas as pd
 from typing import Tuple
 from math import log
 from scipy.stats import spearmanr
+import logging
+
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("csv", type=str)
@@ -66,11 +70,14 @@ if __name__ == "__main__":
     m, c, r2 = fit_logfreq_vs_A(df)
     m_lo, m_hi = bootstrap_ci(df, alpha=args.alpha, B=args.boot)
     rho, p = degeneracy_spearman(df)
-    print({
-        "m": m,
-        "m_CI": [m_lo, m_hi],
-        "R2": r2,
-        "rho_deg": rho,
-        "p_deg": p,
-        "N_rows": int(df.shape[0])
-    })
+    logger.info(
+        "%s",
+        {
+            "m": m,
+            "m_CI": [m_lo, m_hi],
+            "R2": r2,
+            "rho_deg": rho,
+            "p_deg": p,
+            "N_rows": int(df.shape[0]),
+        },
+    )

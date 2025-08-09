@@ -1,10 +1,12 @@
-import hashlib, json, os, subprocess, sys, time, yaml
+import hashlib, json, os, subprocess, sys, time, yaml, logging
 from datetime import datetime
 from pathlib import Path
 
 # ensure repository root on path for package imports
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from assembly_diffusion.pipeline import run_pipeline
+
+logger = logging.getLogger(__name__)
 
 
 def _git_hash():
@@ -58,6 +60,7 @@ def _manifest(outdir, cfg, extra):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     import argparse, random
     import numpy as np
 
@@ -94,4 +97,4 @@ if __name__ == "__main__":
     write_metrics(outdir, seed=int(cfg["seed"]), config=cfg, **metrics)
 
     _manifest(outdir, cfg, extra={"run_id": run_id, "requires_confirmation": flags})
-    print(f"[OK] Wrote manifest and artifacts to {outdir}")
+    logger.info("[OK] Wrote manifest and artifacts to %s", outdir)

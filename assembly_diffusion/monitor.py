@@ -10,6 +10,9 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -269,7 +272,7 @@ class RunMonitor:
         except Exception:
             pass
         try:
-            print(err, file=sys.stderr)
+            logger.error(err)
         except Exception:
             pass
         self._error_logged = True

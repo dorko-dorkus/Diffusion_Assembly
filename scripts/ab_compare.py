@@ -1,9 +1,11 @@
-import json, os, subprocess, sys, tempfile, yaml, shutil
+import json, os, subprocess, sys, tempfile, yaml, shutil, logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 def run(name):
     out = subprocess.check_output([sys.executable, "scripts/experiment.py", "--name", name]).decode()
-    print(out)
+    logger.info(out)
     # extract last line path
     for line in out.splitlines()[::-1]:
         if "Wrote manifest" in line:
@@ -11,6 +13,7 @@ def run(name):
     raise RuntimeError("Run output dir not found")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     reg = yaml.safe_load(open("configs/registry.yaml"))
     A = "exp01_baseline"
     B = "exp02_guided_lambda1"
@@ -46,16 +49,16 @@ if __name__ == "__main__":
             delta_ci = None
         rows.append((label, delta, delta_ci))
 
-    print("| Metric | Δ(B−A) | 95% CI |")
-    print("|---|---|---|")
+    logger.info("| Metric | Δ(B−A) | 95% CI |")
+    logger.info("|---|---|---|")
     for label, delta, ci in rows:
         if ci:
             ci_str = f"[{ci[0]:.3f}, {ci[1]:.3f}]"
         else:
             ci_str = "N/A"
-        print(f"| {label} | {delta:.3f} | {ci_str} |")
+        logger.info("| %s | %.3f | %s |", label, delta, ci_str)
 
-    print(json.dumps(summary, indent=2))
+    logger.info(json.dumps(summary, indent=2))
     with open("results/ab_summary.json","w") as f:
         json.dump(summary,f,indent=2)
-    print("[OK] Wrote results/ab_summary.json")
+    logger.info("[OK] Wrote results/ab_summary.json")

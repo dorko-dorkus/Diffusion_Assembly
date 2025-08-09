@@ -1,9 +1,13 @@
 import argparse
 from typing import List, Tuple
 
+import argparse
+import logging
 import torch
 
 from .config import SamplingConfig
+
+logger = logging.getLogger(__name__)
 
 
 class PolicyGrammarAdapter:
@@ -92,9 +96,9 @@ def sample_demo(args):
     init_states = [x_init.copy() for _ in range(64)]
     final_states, _ = sample_with_guidance(batch_policy, grammar, init_states, cfg, device=device)
     try:
-        print(final_states[0].canonical_smiles())
+        logger.info(final_states[0].canonical_smiles())
     except ImportError:  # pragma: no cover - optional RDKit
-        print("RDKit not installed; skipping SMILES output")
+        logger.warning("RDKit not installed; skipping SMILES output")
 
 
 def main(argv=None):
