@@ -9,6 +9,7 @@ from analysis import (
     bootstrap_delta_median,
     sensitivity_over_lambda,
     error_quantiles,
+    calibration_curve,
 )
 
 
@@ -58,3 +59,13 @@ def test_error_quantiles():
     assert qs[0.0] == 0.0
     assert qs[0.5] == pytest.approx(1.0)
     assert qs[1.0] == pytest.approx(1.0)
+
+
+def test_calibration_curve():
+    pred = [0.0, 1.0, 2.0, 3.0]
+    true = [0.0, 0.5, 2.0, 2.5]
+    curve = calibration_curve(pred, true, bins=2)
+    assert curve["pred_mean"].shape == curve["true_mean"].shape
+    # First bin contains two lowest points with mean pred 0.5 and mean true 0.25
+    assert curve["pred_mean"][0] == pytest.approx(0.5)
+    assert curve["true_mean"][0] == pytest.approx(0.25)

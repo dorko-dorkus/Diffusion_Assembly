@@ -107,6 +107,41 @@ def sensitivity_over_lambda(
     return medians
 
 
+def calibration_curve(
+    pred: Sequence[float],
+    true: Sequence[float],
+    bins: int = 10,
+) -> Dict[str, np.ndarray]:
+    """Compute a simple calibration curve for predictions.
+
+    The range of ``pred`` is split into ``bins`` equal-width segments.  For
+    each non-empty bin the mean predicted value and the mean true value are
+    recorded.  The function returns arrays of these means which can be used to
+    plot calibration curves.
+    """
+
+    p = np.asarray(pred, dtype=float)
+    t = np.asarray(true, dtype=float)
+    if p.shape != t.shape:
+        raise ValueError("pred and true must have the same length")
+    if p.size == 0 or bins <= 0:
+        return {"pred_mean": np.array([]), "true_mean": np.array([])}
+
+    edges = np.linspace(p.min(), p.max(), bins + 1)
+    inds = np.digitize(p, edges) - 1
+    pred_means = []
+    true_means = []
+    for b in range(bins):
+        mask = inds == b
+        if np.any(mask):
+            pred_means.append(p[mask].mean())
+            true_means.append(t[mask].mean())
+    return {
+        "pred_mean": np.asarray(pred_means, dtype=float),
+        "true_mean": np.asarray(true_means, dtype=float),
+    }
+
+
 def error_quantiles(
     pred: Sequence[float],
     true: Sequence[float],
@@ -143,5 +178,6 @@ __all__ = [
     "mixed_effects_logistic",
     "bootstrap_delta_median",
     "sensitivity_over_lambda",
+    "calibration_curve",
     "error_quantiles",
 ]

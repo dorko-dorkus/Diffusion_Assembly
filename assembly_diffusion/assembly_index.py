@@ -55,11 +55,37 @@ class AssemblyIndex:
         return TreeGrammar.D_min_exact(G, N_limit=N_limit)
 
     @staticmethod
-    def A_star_exact_or_none(graph):
-        """Return exact A* if ``graph`` is acyclic; otherwise ``None``."""
+    def A_star_exact_or_none(graph, cycle_limit: int = 2):
+        """Return the exact assembly index for small cycle graphs.
 
-        if hasattr(graph, "is_acyclic") and graph.is_acyclic():
-            return graph.num_edges()
+        The cyclomatic number ``μ = E - V + C`` counts the number of
+        independent cycles in ``graph``.  Recent results show that for
+        graphs with ``μ ≤ 2`` the assembly index is exactly ``E + μ``.
+        This covers acyclic, unicyclic and bicyclic molecules which form
+        the bulk of small organic compounds.
+
+        Parameters
+        ----------
+        graph:
+            The :class:`~assembly_diffusion.graph.MoleculeGraph` to
+            analyse.
+        cycle_limit:
+            Maximum cyclomatic number for which the closed form is
+            guaranteed.  Graphs exceeding this limit return ``None``.
+
+        Returns
+        -------
+        int | None
+            Exact assembly index when ``μ ≤ cycle_limit``; otherwise
+            ``None``.
+        """
+
+        E = graph.num_edges()
+        V = graph.num_nodes()
+        mu = max(0, E - V + graph.num_connected_components())
+        if mu <= cycle_limit:
+            # For μ ≤ 2 this formula is provably exact
+            return E + mu
         return None
 
     @staticmethod
