@@ -6,7 +6,7 @@ optionally on :mod:`rdkit` for validation and SMILES generation.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import torch
 from torch import Tensor
@@ -38,15 +38,24 @@ class MoleculeGraph:
     bonds:
         A square adjacency matrix with integer bond orders.  The matrix is
         symmetric and ``bonds[i, j] > 0`` indicates a bond.
+    coords:
+        Optional ``(N, 3)`` array of 3D coordinates for each atom.  The field
+        is present to enable 3D‑aware models but is unused by core graph
+        operations.
     """
 
     atoms: List[str]
     bonds: Tensor
+    coords: Optional[Tensor] = None
 
     def copy(self) -> "MoleculeGraph":
         """Return a deep copy of the molecular graph."""
 
-        return MoleculeGraph(self.atoms.copy(), self.bonds.clone())
+        return MoleculeGraph(
+            self.atoms.copy(),
+            self.bonds.clone(),
+            None if self.coords is None else self.coords.clone(),
+        )
 
     # ------------------------------------------------------------------
     # Utility helpers used by forward/reverse diffusion kernels
@@ -79,6 +88,14 @@ class MoleculeGraph:
         new_bonds[:n, :n] = self.bonds
         new_bonds[n, attach_site] = new_bonds[attach_site, n] = bond_order
         self.bonds = new_bonds
+
+        if self.coords is not None:
+            new_coords = torch.zeros(
+                (n + 1, 3), dtype=self.coords.dtype, device=self.coords.device
+            )
+            new_coords[:n] = self.coords
+            # New atom coordinates initialised at origin; callers may adjust.
+            self.coords = new_coords
 
     # Basic graph statistics -------------------------------------------------
     def num_nodes(self) -> int:
@@ -125,7 +142,16 @@ class MoleculeGraph:
             i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
             order = int(bond.GetBondTypeAsDouble())
             bonds[i, j] = bonds[j, i] = order
-        return MoleculeGraph(atoms, bonds)
+        coords: Optional[Tensor] = None
+        try:  # pragma: no cover - optional conformer info
+            conf = mol.GetConformer()
+            coords = torch.tensor(
+                [list(conf.GetAtomPosition(i)) for i in range(n)],
+                dtype=torch.float32,
+            )
+        except Exception:
+            pass
+        return MoleculeGraph(atoms, bonds, coords)
 
     def to_rdkit(self) -> "Chem.Mol":
         """Convert this graph to an RDKit molecule.

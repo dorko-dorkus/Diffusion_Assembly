@@ -9,6 +9,7 @@ __all__ = [
     "policy",
     "sampler",
     "guidance",
+    "se3_guidance",
     "data",
     "train",
     "config",
