@@ -107,10 +107,41 @@ def sensitivity_over_lambda(
     return medians
 
 
+def error_quantiles(
+    pred: Sequence[float],
+    true: Sequence[float],
+    quantiles: Sequence[float] | None = None,
+) -> Dict[float, float]:
+    """Return absolute error quantiles between ``pred`` and ``true`` values.
+
+    Parameters
+    ----------
+    pred, true:
+        Sequences of predictions and ground truth values of equal length.
+    quantiles:
+        Quantiles ``q`` in ``[0, 1]`` at which to evaluate the distribution of
+        absolute errors ``|pred - true|``.  By default the function computes the
+        deciles.
+    """
+
+    if quantiles is None:
+        quantiles = np.linspace(0.0, 1.0, 11)
+    p = np.asarray(pred, dtype=float)
+    t = np.asarray(true, dtype=float)
+    if p.shape != t.shape:
+        raise ValueError("pred and true must have the same length")
+    if p.size == 0:
+        return {float(q): 0.0 for q in quantiles}
+    err = np.abs(p - t)
+    qs = np.quantile(err, quantiles)
+    return {float(q): float(v) for q, v in zip(quantiles, qs)}
+
+
 __all__ = [
     "ks_test",
     "scaffold_diversity",
     "mixed_effects_logistic",
     "bootstrap_delta_median",
     "sensitivity_over_lambda",
+    "error_quantiles",
 ]

@@ -3,7 +3,10 @@ from __future__ import annotations
 import os
 import random
 import time
+from pathlib import Path
 from typing import Iterable, List, Tuple, Optional, Dict, Any
+
+import numpy as np
 
 # Try RDKit early to fail fast when metrics require it
 try:
@@ -225,6 +228,52 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
     return out
 
 
+def _calibrate_ai_surrogate(
+    outdir: str, n_mols: int = 3000, quantiles: Optional[Iterable[float]] = None
+) -> None:
+    """Write absolute error quantiles between surrogate and Monte-Carlo AI."""
+
+    out_path = Path(outdir) / "ai_calibration.csv"
+    if (
+        n_mols <= 0
+        or AISurrogate is None
+        or AssemblyMC is None
+        or load_qm9_chon is None
+    ):
+        out_path.write_text("quantile,abs_error\n", encoding="utf-8")
+        return
+
+    try:
+        dataset = load_qm9_chon()
+    except Exception:
+        dataset = []
+
+    random.Random(0).shuffle(dataset)
+    subset = dataset[:n_mols]
+    surrogate = AISurrogate()
+    mc = AssemblyMC()
+    errors = []
+    for g in subset:
+        try:
+            ai_exact = mc.ai(g) if hasattr(mc, "ai") else mc.estimate(g)
+            ai_surr = surrogate.score(g)
+            errors.append(abs(ai_surr - ai_exact))
+        except Exception:
+            continue
+
+    if quantiles is None:
+        quantiles = np.linspace(0.0, 1.0, 11)
+    if errors:
+        qs = np.quantile(np.asarray(errors, dtype=float), quantiles)
+    else:
+        qs = np.zeros(len(list(quantiles)))
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("quantile,abs_error\n")
+        for q, v in zip(quantiles, qs):
+            f.write(f"{float(q):.2f},{float(v):.6f}\n")
+
+
 def run_pipeline(
     cfg: Dict[str, Any], outdir: str
 ) -> Tuple[Dict[str, float], Dict[str, bool]]:
@@ -352,6 +401,12 @@ def run_pipeline(
     # Median AI over non-null scores
     ai_clean = [float(a) for a in ai_scores if a is not None]
     median_ai = _median(ai_clean)
+
+    # Surrogate calibration on QM9 subset
+    cal_cfg = ai_cfg.get("calibration", {})
+    if cal_cfg.get("enabled", True):
+        n_cal = int(cal_cfg.get("n_mols", 3000))
+        _calibrate_ai_surrogate(outdir, n_mols=n_cal)
 
     # 5) Return metrics for write_metrics
     metrics = {

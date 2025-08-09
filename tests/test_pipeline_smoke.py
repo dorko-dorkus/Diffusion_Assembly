@@ -13,3 +13,7 @@ def test_pipeline_runs():
         m = json.load(open(run_dir / "metrics.json"))
         for k in ["valid_fraction", "uniqueness", "diversity", "novelty", "median_ai"]:
             assert k in m
+        # calibration curve should be present
+        cal_path = run_dir / "ai_calibration.csv"
+        assert cal_path.exists()
+        assert cal_path.read_text().startswith("quantile")
