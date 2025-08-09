@@ -49,7 +49,7 @@ def main():
             x = sampler.sample(kernel.T, x_init, guidance=guide, gamma=1.0)
             try:
                 smiles = x.canonical_smiles()
-            except Exception:
+            except (ValueError, RuntimeError):
                 smiles = None
             records.append(
                 {

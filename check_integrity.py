@@ -30,7 +30,7 @@ def main() -> None:
             .decode("utf-8")
             .strip()
         )
-    except Exception as exc:
+    except (subprocess.CalledProcessError, OSError) as exc:
         logger.error("Unable to determine git commit: %s", exc)
         raise SystemExit(1)
 
@@ -38,7 +38,7 @@ def main() -> None:
     for path in glob.glob(os.path.join("checkpoints", "*.pt")):
         try:
             data = torch.load(path, map_location="cpu")
-        except Exception as exc:  # pragma: no cover - best effort load
+        except (OSError, RuntimeError) as exc:  # pragma: no cover - best effort load
             logger.error("Failed to load %s: %s", path, exc)
             ok = False
             continue

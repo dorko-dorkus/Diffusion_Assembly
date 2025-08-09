@@ -42,7 +42,7 @@ def generate_qm9_chon_ai(
 
     try:
         dataset = load_qm9_chon(max_heavy=max_heavy, data_dir=data_dir)
-    except Exception:  # pragma: no cover - dependency missing
+    except (ImportError, OSError, RuntimeError):  # pragma: no cover - dependency missing
         dataset = []
 
     surrogate = AISurrogate()
@@ -55,7 +55,7 @@ def generate_qm9_chon_ai(
             smiles = Chem.MolToSmiles(mol, canonical=True)
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol)
             desc = _descriptor_vec(mol)
-        except Exception:
+        except (ValueError, RuntimeError):
             smiles = "".join(graph.atoms)
             scaffold = "NA"
             desc = [0.0] * 6
