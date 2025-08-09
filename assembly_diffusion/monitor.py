@@ -6,6 +6,8 @@ import queue
 import signal
 import sys
 import hashlib
+import subprocess
+from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
@@ -32,6 +34,25 @@ except Exception:  # pragma: no cover - dependency not installed
     pynvml = None  # type: ignore
 
 
+def _git_hash() -> str:
+    """Return the current git commit hash or ``"unknown"``."""
+    repo_root = Path(__file__).resolve().parents[1]
+    if not (repo_root / ".git").exists():
+        return "unknown"
+    try:
+        return (
+            subprocess.check_output([
+                "git",
+                "rev-parse",
+                "HEAD",
+            ], stderr=subprocess.DEVNULL, cwd=repo_root)
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return "unknown"
+
+
 class RunMonitor:
     """Non-blocking run monitor.
 
@@ -46,6 +67,8 @@ class RunMonitor:
         use_tb: bool = True,
         hb_interval: float = 30.0,
         eta_window: int = 100,
+        git_hash: Optional[str] = None,
+        config: Optional[dict] = None,
     ):
         os.makedirs(run_dir, exist_ok=True)
         self.run_dir = run_dir
@@ -67,7 +90,15 @@ class RunMonitor:
         self._step = 0
         self._total = None
         self._ckpt_path = None
+        self._eta_seconds: float | None = None
         self._hb_interval = hb_interval
+        self._git_hash = git_hash or _git_hash()
+        self._config = config or {}
+        try:
+            with open(os.path.join(run_dir, "run_metadata.json"), "w") as f:
+                json.dump({"git_hash": self._git_hash, "config": self._config}, f)
+        except Exception as e:
+            self._log_error_once("metadata write failed", e)
         self.tb = None
         if use_tb and SummaryWriter:
             try:
@@ -133,6 +164,7 @@ class RunMonitor:
         if total is not None and total > 0 and self._dt_ema is not None:
             remaining = max(0, total - step)
             eta = remaining * self._dt_ema
+        self._eta_seconds = eta
         self._event("progress", step=step, total=total, eta_seconds=eta)
 
     def scalar(self, name: str, value: float, step: int) -> None:
@@ -142,6 +174,18 @@ class RunMonitor:
                 self.tb.add_scalar(name, value, step)
             except Exception as e:
                 self._log_error_once("TensorBoard add_scalar failed", e)
+
+    def sample_smiles(self, smiles: list[str], step: int) -> None:
+        self._event("sample_smiles", smiles=smiles, step=step)
+        fname = os.path.join(self.run_dir, f"smiles_step{step:08d}.smi")
+        try:
+            with open(fname, "w") as f:
+                f.write(f"# git_hash: {self._git_hash}\n")
+                f.write("# config: " + json.dumps(self._config) + "\n")
+                for s in smiles:
+                    f.write(s + "\n")
+        except Exception as e:
+            self._log_error_once("sample_smiles write failed", e)
 
     def resources(
         self,
@@ -173,6 +217,9 @@ class RunMonitor:
                 for chunk in iter(lambda: f.read(1 << 20), b""):
                     h.update(chunk)
             checksum = h.hexdigest()
+            meta_path = path + ".meta.json"
+            with open(meta_path, "w") as mf:
+                json.dump({"git_hash": self._git_hash, "config": self._config}, mf)
         except Exception as e:
             self._log_error_once("checkpoint metadata failed", e)
         self._event(
@@ -289,6 +336,8 @@ class RunMonitor:
         evt = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "kind": kind,
+            "git_hash": self._git_hash,
+            "config": self._config,
         }
         evt.update({k: v for k, v in payload.items() if v is not None})
         if kind in {"checkpoint", "signal_checkpoint_request"}:
@@ -342,6 +391,9 @@ class RunMonitor:
             "time": datetime.utcnow().isoformat() + "Z",
             "step": self._step,
             "last_ckpt": self._ckpt_path,
+            "eta_seconds": self._eta_seconds,
+            "git_hash": self._git_hash,
+            "config": self._config,
         }
         try:
             with open(self.heartbeat_path, "w") as f:
