@@ -2,6 +2,8 @@ import os
 import random
 import logging
 import time
+from typing import Union
+
 import torch
 
 from .forward import ForwardKernel
@@ -15,7 +17,7 @@ from .monitor import RunMonitor
 logger = logging.getLogger(__name__)
 
 
-def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph):
+def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph) -> Union[str, tuple[int, int, int]]:
     """Return a random edit transforming ``xt`` toward ``x0`` or ``STOP`` if none."""
     diff = []
     n = len(x0.atoms)
@@ -42,7 +44,7 @@ def train_epoch(
     writer=None,
     ckpt_interval: int | None = 500,
     monitor: RunMonitor | None = None,
-):
+) -> dict[str, float]:
     """Train ``policy`` for one epoch over ``loader``.
 
     The ``loader`` is expected to yield tuples ``(atom_tensor, bond_tensor)``
