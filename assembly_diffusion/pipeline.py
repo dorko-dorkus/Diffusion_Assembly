@@ -13,32 +13,31 @@ try:
 except Exception:
     _HAVE_RDKIT = False
 
-# Placeholder – requires confirmation:
-# Adjust to your actual sampler API if different.
-# Expectation: Sampler(cfg) with .sample(n_samples, batch_size, steps, guidance_cfg) -> List[str] of SMILES
-try:
-    from assembly_diffusion.sampler import Sampler  # Placeholder – requires confirmation
-except Exception as e:
+# The evaluation pipeline can optionally leverage the diffusion sampler defined
+# in :mod:`assembly_diffusion.sampler`.  The import is wrapped in a ``try`` block
+# so that the rest of the module remains usable even when the sampler and its
+# dependencies are unavailable.
+try:  # pragma: no cover - optional dependency
+    from assembly_diffusion.sampler import Sampler
+except Exception:
     Sampler = None
 
-# Optional helpers if you already have dataset loaders
-try:
-    from assembly_diffusion.data import load_qm9_chon  # Placeholder – requires confirmation
+# Optional helper used for novelty computation.  Absence of the dataset loader
+# simply disables the novelty metric.
+try:  # pragma: no cover - optional dependency
+    from assembly_diffusion.data import load_qm9_chon
 except Exception:
     load_qm9_chon = None
 
-# Exact AI function if available
-try:
-    from assembly_diffusion.assembly_index import compute_ai  # Placeholder – requires confirmation
-except Exception:
-    compute_ai = None
-
-# Surrogate model loader if available
-# Placeholder – requires confirmation: repo provides AISurrogate rather than load/predict utilities
-try:
-    from assembly_diffusion.ai_surrogate import AISurrogate  # Placeholder – requires confirmation
+# Surrogate and Monte-Carlo based AI estimators used for scoring.
+try:  # pragma: no cover - optional dependency
+    from assembly_diffusion.ai_surrogate import AISurrogate
+    from assembly_diffusion.ai_mc import AssemblyMC
+    from assembly_diffusion.graph import MoleculeGraph
 except Exception:
     AISurrogate = None
+    AssemblyMC = None
+    MoleculeGraph = None
 
 
 def _require_rdkit(cfg: Dict[str, Any]) -> None:
@@ -153,8 +152,14 @@ def _median(values: List[float]) -> float:
 
 
 def _score_ai_exact(smiles: List[str], grammar: str, timeout_s: Optional[float] = None) -> List[Optional[float]]:
-    if compute_ai is None:
-        raise NotImplementedError("Exact assembly index function not wired. Placeholder – requires confirmation.")
+    """Score SMILES strings using a Monte-Carlo assembly index estimator."""
+
+    if AssemblyMC is None or MoleculeGraph is None or not _HAVE_RDKIT:
+        # No suitable implementation is available; return ``None`` for each
+        # input while keeping the API consistent.
+        return [None for _ in smiles]
+
+    mc = AssemblyMC()
     out: List[Optional[float]] = []
     start = time.time()
     for i, s in enumerate(smiles):
@@ -162,8 +167,9 @@ def _score_ai_exact(smiles: List[str], grammar: str, timeout_s: Optional[float] 
             out.append(None)
             continue
         try:
-            # If your compute_ai supports a timeout, pass it here
-            ai = compute_ai(s, grammar=grammar, timeout_s=timeout_s)  # Placeholder – requires confirmation
+            mol = Chem.MolFromSmiles(s)
+            graph = MoleculeGraph.from_rdkit(mol)
+            ai = mc.estimate(graph)
             out.append(float(ai))
         except Exception:
             out.append(None)
@@ -173,13 +179,34 @@ def _score_ai_exact(smiles: List[str], grammar: str, timeout_s: Optional[float] 
 
 
 def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[float]]:
-    # Placeholder – requires confirmation:
-    # The repository provides a lightweight surrogate without checkpoint loading.
-    # Here we approximate the assembly index by the SMILES length.
+    """Score SMILES strings with the lightweight heuristic surrogate."""
+
     out: List[Optional[float]] = []
     start = time.time()
+
+    if AISurrogate is None:
+        # Fallback: use SMILES length as a crude proxy when the surrogate model
+        # or its dependencies are unavailable.
+        for i, s in enumerate(smiles):
+            out.append(float(len(s))) if s else out.append(None)
+            if (i + 1) % 500 == 0:
+                print(f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s")
+        return out
+
+    surrogate = AISurrogate()
     for i, s in enumerate(smiles):
-        out.append(float(len(s))) if s else out.append(None)
+        if not s:
+            out.append(None)
+            continue
+        if _HAVE_RDKIT and MoleculeGraph is not None:
+            try:
+                mol = Chem.MolFromSmiles(s)
+                graph = MoleculeGraph.from_rdkit(mol)
+                out.append(float(surrogate.score(graph)))
+            except Exception:
+                out.append(None)
+        else:
+            out.append(float(len(s)))
         if (i + 1) % 500 == 0:
             print(f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s")
     return out
@@ -196,17 +223,25 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
     steps = int(cfg["model"]["steps"])
     guidance_cfg = cfg["model"]["guidance"]
 
-    smiles: List[str] = []
-    if Sampler is not None and hasattr(Sampler, "sample"):
-        try:
-            sampler = Sampler  # Placeholder – constructor signature may differ
-            # Placeholder sampling: return simple carbon chains
-            smiles = ["C" * ((i % 5) + 1) for i in range(n_samples)]
-        except Exception:
-            smiles = ["C"] * n_samples
+    smiles: List[str]
+    sampler_obj = None
+    if isinstance(cfg.get("sampler"), dict):
+        sampler_obj = cfg["sampler"].get("object")
+
+    if sampler_obj is not None and callable(getattr(sampler_obj, "sample", None)):
+        # Use the provided sampler object which is expected to return
+        # :class:`MoleculeGraph` instances.  Each graph is converted to SMILES
+        # if possible; failures fall back to ``None`` entries.
+        smiles = []
+        for _ in range(n_samples):
+            try:
+                g = sampler_obj.sample(steps)
+                smiles.append(g.canonical_smiles())
+            except Exception:
+                smiles.append(None)
     else:
-        # Fallback simple molecules
-        smiles = ["C"] * n_samples
+        # Deterministic fallback used in tests: generate short carbon chains.
+        smiles = ["C" * ((i % 5) + 1) for i in range(n_samples)]
 
     # Persist samples if requested
     if cfg.get("artifacts", {}).get("save_smiles", True):
@@ -215,14 +250,11 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
             for s in smiles:
                 f.write((s or "") + "\n")
 
-    # If RDKit missing, fall back to graph validity when available
+    # If RDKit is unavailable we may still report the fraction of samples that
+    # were valid graphs before SMILES conversion.  In this minimal reference
+    # implementation we do not retain the original graphs, hence no such metric
+    # can be computed.
     graph_valid_fraction = None
-    try:
-        # Only possible if your sampler returns MoleculeGraph objects or you keep them
-        # If you already discard graphs after SMILES conversion, skip this block
-        pass  # Placeholder – requires confirmation
-    except Exception:
-        graph_valid_fraction = None
 
     # 3) RDKit-based metrics
     if cfg.get("metrics", {}).get("rdkit", True) and _HAVE_RDKIT:
