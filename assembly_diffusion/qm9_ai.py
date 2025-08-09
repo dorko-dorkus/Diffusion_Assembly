@@ -59,7 +59,10 @@ def generate_qm9_chon_ai(
             smiles = "".join(graph.atoms)
             scaffold = "NA"
             desc = [0.0] * 6
-        ai_exact = mc.ai(graph)
+        if hasattr(mc, "ai"):
+            ai_exact = mc.ai(graph)
+        else:
+            ai_exact = mc.estimate(graph)
         ai_surr = surrogate.score(graph)
         ai_conflict = int(round(ai_surr) != ai_exact)
         rows.append([smiles, ai_exact, ai_surr, scaffold, *desc, ai_conflict])
