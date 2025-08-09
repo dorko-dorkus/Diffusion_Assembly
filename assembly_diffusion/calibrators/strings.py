@@ -3,7 +3,7 @@ import torch
 from dataclasses import dataclass
 from typing import List, Tuple
 
-Alphabet = Tuple[str, ...]
+Alphabet = Tuple[str, str, str]
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else torch.device("cpu"))
@@ -28,7 +28,9 @@ class StringGrammar:
 
         if not guided or gamma == 0.0:
             return int(
-                torch.randint(1, self.L_max + 1, (1,), device=device, generator=generator).item()
+                torch.randint(
+                    1, self.L_max + 1, (1,), device=device, generator=generator
+                ).item()
             )
         lengths = torch.arange(1, self.L_max + 1, device=device, dtype=torch.float)
         weights = torch.exp(gamma * lengths)

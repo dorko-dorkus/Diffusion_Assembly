@@ -9,6 +9,7 @@ from typing import Iterable, List, Tuple, Optional, Dict, Any
 try:
     from rdkit import Chem, DataStructs
     from rdkit.Chem import AllChem
+
     _HAVE_RDKIT = True
 except Exception:
     _HAVE_RDKIT = False
@@ -83,7 +84,9 @@ def _fingerprints(valid_smiles: List[str]) -> List[Any]:
     return fps
 
 
-def _internal_diversity(fps: List[Any], max_mols: int = 500, max_pairs: int = 10_000) -> float:
+def _internal_diversity(
+    fps: List[Any], max_mols: int = 500, max_pairs: int = 10_000
+) -> float:
     """Average pairwise 1 - Tanimoto over a subsample."""
     if len(fps) < 2:
         return 0.0
@@ -107,18 +110,20 @@ def _internal_diversity(fps: List[Any], max_mols: int = 500, max_pairs: int = 10
                 continue
             seen.add((i, j))
             sim = DataStructs.TanimotoSimilarity(fps[i], fps[j])
-            acc += (1.0 - sim)
+            acc += 1.0 - sim
             k += 1
     else:
         for i in range(n):
             for j in range(i + 1, n):
                 sim = DataStructs.TanimotoSimilarity(fps[i], fps[j])
-                acc += (1.0 - sim)
+                acc += 1.0 - sim
                 k += 1
     return acc / max(k, 1)
 
 
-def _novelty(valid_canonical: List[str], dataset_name: str, split: str, limit: int) -> float:
+def _novelty(
+    valid_canonical: List[str], dataset_name: str, split: str, limit: int
+) -> float:
     """Fraction of valid samples not present in the reference dataset split."""
     if load_qm9_chon is None:
         # Minimal fallback if your loader is not available
@@ -151,7 +156,9 @@ def _median(values: List[float]) -> float:
     return float(0.5 * (vs[mid - 1] + vs[mid]))
 
 
-def _score_ai_exact(smiles: List[str], grammar: str, timeout_s: Optional[float] = None) -> List[Optional[float]]:
+def _score_ai_exact(
+    smiles: List[str], grammar: str, timeout_s: Optional[float] = None
+) -> List[Optional[float]]:
     """Score SMILES strings using a Monte-Carlo assembly index estimator."""
 
     if AssemblyMC is None or MoleculeGraph is None or not _HAVE_RDKIT:
@@ -174,7 +181,9 @@ def _score_ai_exact(smiles: List[str], grammar: str, timeout_s: Optional[float] 
         except Exception:
             out.append(None)
         if (i + 1) % 500 == 0:
-            print(f"[ai-exact] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s")
+            print(
+                f"[ai-exact] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+            )
     return out
 
 
@@ -190,7 +199,9 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
         for i, s in enumerate(smiles):
             out.append(float(len(s))) if s else out.append(None)
             if (i + 1) % 500 == 0:
-                print(f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s")
+                print(
+                    f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+                )
         return out
 
     surrogate = AISurrogate()
@@ -208,12 +219,22 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
         else:
             out.append(float(len(s)))
         if (i + 1) % 500 == 0:
-            print(f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s")
+            print(
+                f"[ai-surrogate] scored {i+1}/{len(smiles)} elapsed={time.time()-start:.1f}s"
+            )
     return out
 
 
-def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
-    """Main entrypoint for experiments. Returns metrics dict matching metrics_writer schema."""
+def run_pipeline(
+    cfg: Dict[str, Any], outdir: str
+) -> Tuple[Dict[str, float], Dict[str, bool]]:
+    """Main entrypoint for experiments.
+
+    Returns a tuple ``(metrics, flags)`` where ``metrics`` follows the
+    :func:`assembly_diffusion.eval.metrics_writer.write_metrics` schema and
+    ``flags`` indicates which metrics are provisional and require confirmation
+    (e.g. when RDKit is unavailable).
+    """
     # 1) Sanity checks and RDKit requirement
     # RDKit is optional for smoke tests. Metrics are gated below.
 
@@ -257,6 +278,13 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
     graph_valid_fraction = None
 
     # 3) RDKit-based metrics
+    flags = {
+        "valid_fraction": False,
+        "uniqueness": False,
+        "diversity": False,
+        "novelty": False,
+    }
+
     if cfg.get("metrics", {}).get("rdkit", True) and _HAVE_RDKIT:
         canonical, valid_mask = _canonicalize(smiles)
         total = len(smiles)
@@ -265,7 +293,9 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
 
         valid_smiles = [s for s, ok in zip(canonical, valid_mask) if ok and s]
         unique_count = len(set(valid_smiles))
-        uniqueness = float(unique_count) / float(valid_count) if valid_count > 0 else 0.0
+        uniqueness = (
+            float(unique_count) / float(valid_count) if valid_count > 0 else 0.0
+        )
 
         fps = _fingerprints(valid_smiles)
         diversity = _internal_diversity(fps) if fps else 0.0
@@ -278,10 +308,14 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
         )
     elif not _HAVE_RDKIT and cfg.get("metrics", {}).get("rdkit", True):
         canonical, valid_mask = smiles, [False] * len(smiles)
-        valid_fraction = float(graph_valid_fraction) if graph_valid_fraction is not None else 0.0
+        valid_fraction = (
+            float(graph_valid_fraction) if graph_valid_fraction is not None else 0.0
+        )
         uniqueness = 0.0
         diversity = 0.0
         novelty = 0.0
+        for k in flags:
+            flags[k] = True
     else:
         canonical, valid_mask = smiles, [False] * len(smiles)
         valid_fraction = 0.0
@@ -298,7 +332,9 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
     ai_inputs = [s for s in (canonical if canonical else []) if s]
 
     if scorer == "exact":
-        ai_scores = _score_ai_exact(ai_inputs, grammar=ai_cfg.get("grammar", "default"), timeout_s=1.0)
+        ai_scores = _score_ai_exact(
+            ai_inputs, grammar=ai_cfg.get("grammar", "default"), timeout_s=1.0
+        )
     elif scorer == "surrogate":
         ckpt = ai_cfg.get("surrogate_ckpt", "")
         ai_scores = _score_ai_surrogate(ai_inputs, ckpt_path=ckpt)
@@ -317,11 +353,12 @@ def run_pipeline(cfg: Dict[str, Any], outdir: str) -> Dict[str, float]:
     ai_clean = [float(a) for a in ai_scores if a is not None]
     median_ai = _median(ai_clean)
 
-    # 5) Return metrics for write_metrics(...)
-    return {
+    # 5) Return metrics for write_metrics
+    metrics = {
         "valid_fraction": float(valid_fraction),
         "uniqueness": float(uniqueness),
         "diversity": float(diversity),
         "novelty": float(novelty),
         "median_ai": float(median_ai),
     }
+    return metrics, flags
