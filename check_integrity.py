@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import glob
+from pathlib import Path
 
 import torch
 
@@ -13,12 +14,20 @@ def main() -> None:
     expects a ``commit`` entry containing the git hash of the source code used
     to create the checkpoint.  The hash must match the repository's HEAD.
     """
+    repo_root = Path(__file__).resolve().parent
+    if not (repo_root / ".git").exists():
+        print("Unable to determine git commit: missing .git directory", file=sys.stderr)
+        raise SystemExit(1)
+
     try:
         head = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"])\
-            .decode("utf-8").strip()
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, cwd=repo_root
+            )
+            .decode("utf-8")
+            .strip()
         )
-    except subprocess.CalledProcessError as exc:
+    except Exception as exc:
         print(f"Unable to determine git commit: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
