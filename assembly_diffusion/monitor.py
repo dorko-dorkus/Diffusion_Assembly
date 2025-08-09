@@ -6,6 +6,7 @@ import queue
 import signal
 import collections
 import sys
+import hashlib
 from datetime import datetime
 from typing import Optional
 
@@ -118,9 +119,30 @@ class RunMonitor:
             gpu_util=gpu_util,
         )
 
+    def resume_from(self, path: str) -> None:
+        self._ckpt_path = path
+        self._event("resume_ok", path=path)
+
     def set_checkpoint(self, path: str) -> None:
         self._ckpt_path = path
-        self._event("checkpoint", path=path, step=self._step)
+        size = None
+        checksum = None
+        try:
+            size = os.path.getsize(path)
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(chunk)
+            checksum = h.hexdigest()
+        except Exception as e:
+            self._log_error_once("checkpoint metadata failed", e)
+        self._event(
+            "checkpoint",
+            path=path,
+            step=self._step,
+            size_bytes=size,
+            checksum=checksum,
+        )
 
     def poll(self) -> tuple[bool, bool]:
         """Check for sentinel files requesting actions.
