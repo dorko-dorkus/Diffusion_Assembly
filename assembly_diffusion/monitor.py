@@ -55,6 +55,8 @@ class RunMonitor:
         self._error_logged = False
         self._q = queue.Queue(maxsize=10000)
         self._stop = threading.Event()
+        self._dropped = 0
+        self._drop_lock = threading.Lock()
         self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self._writer_thread.start()
         self._start_time = time.time()
@@ -232,11 +234,21 @@ class RunMonitor:
             "kind": kind,
         }
         evt.update({k: v for k, v in payload.items() if v is not None})
-        try:
-            self._q.put_nowait(evt)
-        except queue.Full:
-            # Drop telemetry rather than block the training loop
-            pass
+        if kind in {"checkpoint", "signal_checkpoint_request"}:
+            for _ in range(3):
+                try:
+                    self._q.put(evt, timeout=0.05)
+                    return
+                except queue.Full:
+                    continue
+        else:
+            try:
+                self._q.put_nowait(evt)
+                return
+            except queue.Full:
+                pass
+        with self._drop_lock:
+            self._dropped += 1
 
     def _writer_loop(self) -> None:
         current_day = datetime.utcnow().strftime("%Y%m%d")
@@ -310,6 +322,7 @@ class RunMonitor:
                 self.resources(
                     cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
                 )
+            self._emit_dropped()
             self._stop.wait(self._hb_interval)
 
     def _sig_dump(self, *_):
@@ -321,3 +334,10 @@ class RunMonitor:
 
     def _sig_ckpt_req(self, *_):
         self._event("signal_checkpoint_request", step=self._step)
+
+    def _emit_dropped(self) -> None:
+        with self._drop_lock:
+            dropped = self._dropped
+            self._dropped = 0
+        if dropped:
+            self._event("dropped_events", count=dropped)
