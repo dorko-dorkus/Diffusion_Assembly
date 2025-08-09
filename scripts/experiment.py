@@ -1,190 +1,87 @@
-
-"""High-level experiment driver for the Diffusion Assembly project.
-
-This script ties together the individual stages used throughout the experiments:
-
-1. **AI generation** via :func:`assembly_diffusion.qm9_ai.generate_qm9_chon_ai`.
-2. **Training** over all configuration variants located in ``configs``.
-3. **Sampling** a single molecule using the trained policy.
-4. **Analysis** using convenience utilities from :mod:`analysis`.
-
-The stages are deliberately lightweight so that the script can be executed in
-continuous integration environments.  A ``--smoke`` flag is provided to limit
-training to a single epoch.
-"""
-
-from __future__ import annotations
-
-import argparse
+import hashlib
+import json
+import os
+import subprocess
 import sys
-import logging
+import time
+from datetime import datetime
 from pathlib import Path
 
 import yaml
-import torch
-from datetime import datetime
-
-# Use GPU when available
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Ensure the repository root is on the Python path so we can import the local
-# modules when the script is executed as ``python scripts/experiment.py``.
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from assembly_diffusion.qm9_ai import generate_qm9_chon_ai
-from assembly_diffusion.config import load_config
-from assembly_diffusion.data import get_dataloader
-from assembly_diffusion.forward import ForwardKernel
-from assembly_diffusion.mask import FeasibilityMask
-from assembly_diffusion.backbone import GNNBackbone
-from assembly_diffusion.policy import ReversePolicy
-from assembly_diffusion.train import train_epoch
-from assembly_diffusion.monitor import RunMonitor
-from analysis import ks_test, sensitivity_over_lambda
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Individual experiment stages
-# ---------------------------------------------------------------------------
-
-def run_ai_generation() -> None:
-    """Generate assembly index annotations for the QM9 CHON subset."""
-    logger.info("[AI generation] Creating QM9 annotations …")
-    generate_qm9_chon_ai()
-
-
-def train_all_configs(config_dir: str = "configs", *, smoke: bool = False) -> None:
-    """Train models for all configuration variants found in ``config_dir``.
-
-    Parameters
-    ----------
-    config_dir:
-        Directory containing YAML configuration files.
-    smoke:
-        If ``True``, restricts training to a single epoch for fast execution.
-    """
-
-    cfg_path = Path(config_dir)
-    for path in sorted(cfg_path.glob("*.yaml")):
-        with open(path, "r", encoding="utf8") as f:
-            raw = yaml.safe_load(f) or {}
-        variants = [k for k in raw.keys() if k != "common"]
-        for variant in variants:
-            cfg = load_config(path, variant)
-            logger.info("[Training] %s:%s", path.name, variant)
-
-            loader = get_dataloader(batch_size=cfg.batch, max_heavy=cfg.max_atoms)
-            kernel = ForwardKernel()
-            mask = FeasibilityMask()
-            policy = ReversePolicy(GNNBackbone(node_dim=cfg.hidden_dim)).to(DEVICE)
-            opt_cls = {
-                "adamw": torch.optim.AdamW,
-                "sgd": torch.optim.SGD,
-            }.get(cfg.optimiser.lower(), torch.optim.AdamW)
-            optimiser = opt_cls(policy.parameters(), lr=cfg.lr)
-
-            run_dir = f"runs/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            monitor = RunMonitor(run_dir, use_tb=True)
-
-            epochs = 1 if smoke else cfg.epochs
-            for epoch in range(epochs):
-                metrics = train_epoch(
-                    loader,
-                    kernel,
-                    policy,
-                    mask,
-                    optimiser,
-                    lambda_reg=cfg.guid_coeff,
-                    epoch=epoch,
-                    monitor=monitor,
-                    ckpt_interval=1000,
-                )
-                if monitor and metrics is not None:
-                    if "loss" in metrics:
-                        monitor.scalar("loss/epoch", float(metrics["loss"]), epoch)
-                    if "accuracy" in metrics:
-                        monitor.scalar("acc/epoch", float(metrics["accuracy"]), epoch)
-                logger.info(
-                    "  Epoch %d/%d - loss: %.3f acc: %.3f",
-                    epoch + 1,
-                    epochs,
-                    metrics["loss"],
-                    metrics["accuracy"],
-                )
-
-            monitor.close()
-
-def run_sampling() -> None:
-    """Draw a single sample from the current policy."""
-    from assembly_diffusion.graph import MoleculeGraph
-    from assembly_diffusion.sampler import Sampler
-
-    logger.info("[Sampling] Drawing one molecule …")
-    torch.manual_seed(0)
-    x_init = MoleculeGraph(
-        ["C", "O"], torch.zeros((2, 2), dtype=torch.int64, device=DEVICE)
-    )
-    kernel = ForwardKernel()
-    mask = FeasibilityMask()
-    policy = ReversePolicy(GNNBackbone()).to(DEVICE)
-    sampler = Sampler(policy, mask)
-    x = sampler.sample(kernel.T, x_init, gamma=1.0)
+def _git_hash() -> str:
     try:
-        logger.info("  Sampled SMILES: %s", x.canonical_smiles())
+        return (
+            subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+        )
     except Exception:
-        logger.info("  Sampled molecule has no valid SMILES representation")
+        return "unknown"
 
 
-def run_analysis() -> None:
-    """Run lightweight analysis on the generated data."""
-    import pandas as pd
-
-    logger.info("[Analysis] Running statistical checks …")
-    path = ROOT / "qm9_chon_ai.csv"
-    if not path.exists():
-        logger.info("  No data available for analysis")
-        return
-
-    df = pd.read_csv(path)
-    if df.empty:
-        logger.info("  Dataset is empty – skipping analysis")
-        return
-
-    sample_a = df["ai_exact"].head(100)
-    sample_b = df["ai_surrogate"].head(100)
-    ks = ks_test(sample_a, sample_b)
-    sens = sensitivity_over_lambda(df.head(5))
-    logger.info(
-        "  KS statistic: %.3f, p-value: %.3g",
-        ks["statistic"],
-        ks["pvalue"],
-    )
-    logger.info("  Sensitivity medians: %s", sens)
+def _pip_freeze() -> list[str]:
+    try:
+        return (
+            subprocess.check_output([sys.executable, "-m", "pip", "freeze"])\
+            .decode()
+            .splitlines()
+        )
+    except Exception:
+        return []
 
 
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
-
-def main(smoke: bool = False) -> None:
-    """Execute the full experiment pipeline."""
-    run_ai_generation()
-    train_all_configs(smoke=smoke)
-    run_sampling()
-    run_analysis()
+def _manifest(outdir: str | os.PathLike, cfg: dict, extra: dict) -> None:
+    Path(outdir).mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "git_hash": _git_hash(),
+        "python": sys.version,
+        "requirements": _pip_freeze(),
+        "config": cfg,
+        "extra": extra,
+    }
+    with open(Path(outdir) / "manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the full experiment pipeline")
-    parser.add_argument(
-        "--smoke",
-        action="store_true",
-        help="Run a lightweight configuration for quick checks",
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--name", required=True, help="Experiment name key in configs/registry.yaml"
     )
-    args = parser.parse_args()
-    main(smoke=args.smoke)
+    p.add_argument("--outdir", default="results", help="Base results dir")
+    args = p.parse_args()
+
+    registry = yaml.safe_load(open("configs/registry.yaml"))
+    assert args.name in registry["experiments"], f"Unknown experiment {args.name}"
+    cfg = registry["experiments"][args.name]
+
+    run_id = f"{args.name}_{int(time.time())}"
+    outdir = os.path.join(args.outdir, run_id)
+    os.makedirs(outdir, exist_ok=True)
+
+    # set seeds
+    import random
+    import numpy as np
+    import torch
+
+    random.seed(cfg["seed"])
+    np.random.seed(cfg["seed"])
+    torch.manual_seed(cfg["seed"])
+
+    # TODO: integrate your existing training/sampling here. Pseudocode:
+    # samples, metrics, ai_scores = run_pipeline(cfg)
+
+    # Placeholder structure for writer calls you already have:
+    # save SMILES
+    # with open(os.path.join(outdir, "samples.smi"), "w") as f: ...
+    # save metrics
+    # json.dump(metrics, open(os.path.join(outdir, "metrics.json"), "w"), indent=2)
+    # save AI scores
+    # np.savetxt(os.path.join(outdir, "ai_scores.csv"), ai_scores, delimiter=",")
+
+    _manifest(outdir, cfg, extra={"run_id": run_id})
+    print(f"[OK] Wrote manifest and artifacts to {outdir}")
+
