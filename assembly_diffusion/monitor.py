@@ -4,7 +4,6 @@ import time
 import threading
 import queue
 import signal
-import collections
 import sys
 import hashlib
 from datetime import datetime
@@ -61,7 +60,10 @@ class RunMonitor:
         self._writer_thread.start()
         self._start_time = time.time()
         self._last_tick = time.time()
-        self._dt_window: collections.deque[float] = collections.deque(maxlen=eta_window)
+        self._eta_window = max(1, eta_window)
+        # Exponential moving average coefficient equivalent to the given window.
+        self._eta_alpha = 2.0 / (self._eta_window + 1)
+        self._dt_ema: float | None = None
         self._step = 0
         self._total = None
         self._ckpt_path = None
@@ -119,14 +121,18 @@ class RunMonitor:
         now = time.time()
         dt = now - self._last_tick
         self._last_tick = now
-        self._dt_window.append(max(1e-6, min(dt, 5.0)))
+        dt = max(1e-6, min(dt, 5.0))
+        if self._dt_ema is None:
+            self._dt_ema = dt
+        else:
+            # Cheap exponential moving average to smooth ETA without storing history.
+            self._dt_ema += self._eta_alpha * (dt - self._dt_ema)
         self._step = step
         self._total = total
         eta = None
-        if total is not None and total > 0:
+        if total is not None and total > 0 and self._dt_ema is not None:
             remaining = max(0, total - step)
-            avg_dt = sum(self._dt_window) / len(self._dt_window)
-            eta = remaining * avg_dt
+            eta = remaining * self._dt_ema
         self._event("progress", step=step, total=total, eta_seconds=eta)
 
     def scalar(self, name: str, value: float, step: int) -> None:
