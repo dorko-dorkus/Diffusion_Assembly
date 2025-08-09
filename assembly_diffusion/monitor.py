@@ -72,9 +72,14 @@ class RunMonitor:
                 self.tb = SummaryWriter(run_dir)
             except Exception as e:
                 self._log_error_once("TensorBoard init failed", e)
-        # Background sampler thread handles heartbeat updates and optional
-        # resource snapshots.  This keeps liveness reporting out of the main
-        # training loop and avoids duplicated boilerplate in callers.
+        # Dedicated heartbeat thread for liveness reporting.
+        self._hb_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True
+        )
+        self._hb_thread.start()
+        # Background sampler thread handles optional resource snapshots.  This
+        # keeps monitoring out of the main training loop and avoids duplicated
+        # boilerplate in callers.
         self._sampler_thread = threading.Thread(
             target=self._sampler_loop, daemon=True
         )
@@ -94,6 +99,7 @@ class RunMonitor:
     def close(self) -> None:
         self._stop.set()
         self._writer_thread.join(timeout=5)
+        self._hb_thread.join(timeout=5)
         self._sampler_thread.join(timeout=5)
         if self.tb:
             try:
@@ -298,6 +304,12 @@ class RunMonitor:
         except Exception as e:
             self._log_error_once("heartbeat write failed", e)
 
+    def _heartbeat_loop(self) -> None:
+        while not self._stop.is_set():
+            self._write_heartbeat()
+            self._emit_dropped()
+            self._stop.wait(self._hb_interval)
+
     def _sample_resources(self) -> tuple[float | None, float | None, float | None, float | None]:
         """Best-effort CPU/GPU resource snapshot."""
         cpu = psutil.cpu_percent(interval=None) if psutil else None
@@ -316,13 +328,11 @@ class RunMonitor:
 
     def _sampler_loop(self) -> None:
         while not self._stop.is_set():
-            self._write_heartbeat()
             cpu, ram, vram, gpu_util = self._sample_resources()
             if any(v is not None for v in (cpu, ram, vram, gpu_util)):
                 self.resources(
                     cpu=cpu, ram_used_gb=ram, vram_used_gb=vram, gpu_util=gpu_util
                 )
-            self._emit_dropped()
             self._stop.wait(self._hb_interval)
 
     def _sig_dump(self, *_):
