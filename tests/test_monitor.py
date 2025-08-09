@@ -1,5 +1,6 @@
 import json
 import time
+import queue
 from pathlib import Path
 
 from assembly_diffusion.monitor import RunMonitor
@@ -52,3 +53,46 @@ def test_resume_event(tmp_path):
     assert evt["path"] == src
     hb = json.loads((tmp_path / "heartbeat.json").read_text())
     assert hb["last_ckpt"] == src
+
+
+def test_drop_counter_and_retry(tmp_path):
+    m = RunMonitor(tmp_path, use_tb=False)
+    # stop background threads to control queue behavior
+    m._stop.set()
+    m._writer_thread.join()
+    m._sampler_thread.join()
+
+    class DummyQ:
+        def __init__(self):
+            self.items = []
+            self.fail_first_n = 0
+
+        def put_nowait(self, item):
+            if self.fail_first_n > 0:
+                self.fail_first_n -= 1
+                raise queue.Full
+            self.items.append(item)
+
+        def put(self, item, timeout=None):
+            if self.fail_first_n > 0:
+                self.fail_first_n -= 1
+                raise queue.Full
+            self.items.append(item)
+
+    q = DummyQ()
+    m._q = q
+
+    q.fail_first_n = 1
+    m.scalar("a", 1.0, 0)
+    assert m._dropped == 1
+    assert q.items == []
+
+    q.fail_first_n = 2
+    m.set_checkpoint("ckpt")
+    assert len(q.items) == 1 and q.items[0]["kind"] == "checkpoint"
+
+    m._emit_dropped()
+    assert len(q.items) == 2
+    assert q.items[1]["kind"] == "dropped_events" and q.items[1]["count"] == 1
+
+    m.close()
