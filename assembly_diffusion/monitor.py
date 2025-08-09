@@ -228,17 +228,62 @@ class RunMonitor:
         self._error_logged = True
 
     def _roll_existing_jsonl(self, today: str) -> None:
-        """Move leftover logs from previous days to a dated file."""
-        if not os.path.exists(self.jsonl_path):
+        """Handle leftover logs when starting a new run.
+
+        If ``events.jsonl`` is a regular file from a previous run, move it to a
+        dated filename so the contents are preserved. Any pre-existing symlink
+        is simply removed so a fresh one can be created.
+        """
+
+        if not os.path.lexists(self.jsonl_path):
+            return
+        if os.path.islink(self.jsonl_path):
+            try:
+                os.unlink(self.jsonl_path)
+            except Exception:
+                pass
             return
         try:
             mtime = datetime.utcfromtimestamp(os.path.getmtime(self.jsonl_path))
             file_day = mtime.strftime("%Y%m%d")
-            if file_day != today:
-                rolled = os.path.join(self.run_dir, f"events-{file_day}.jsonl")
-                os.replace(self.jsonl_path, rolled)
+            rolled = os.path.join(self.run_dir, f"events-{file_day}.jsonl")
+            os.replace(self.jsonl_path, rolled)
         except Exception as e:
             self._log_error_once("event log rotation failed", e)
+
+    def _open_log_file(self, day: str):
+        """Open the daily log file and update ``events.jsonl`` symlink."""
+        path = os.path.join(self.run_dir, f"events-{day}.jsonl")
+        try:
+            f = open(path, "a", buffering=1)
+        except Exception as e:
+            self._log_error_once("event writer failed to open", e)
+            return None
+        try:
+            tmp_link = self.jsonl_path + ".tmp"
+            try:
+                os.remove(tmp_link)
+            except FileNotFoundError:
+                pass
+            os.symlink(os.path.basename(path), tmp_link)
+            os.replace(tmp_link, self.jsonl_path)
+        except Exception:
+            try:
+                if os.path.islink(tmp_link):
+                    os.unlink(tmp_link)
+            except Exception:
+                pass
+            # Best effort; if symlinks are unsupported fall back to using the
+            # plain filename.
+            try:
+                os.replace(path, self.jsonl_path)
+                path = self.jsonl_path
+                f.close()
+                f = open(path, "a", buffering=1)
+            except Exception as e:
+                self._log_error_once("event writer failed to open", e)
+                return None
+        return f
 
     def _event(self, kind: str, **payload) -> None:
         evt = {
@@ -265,25 +310,19 @@ class RunMonitor:
     def _writer_loop(self) -> None:
         current_day = datetime.utcnow().strftime("%Y%m%d")
         self._roll_existing_jsonl(current_day)
-        try:
-            f = open(self.jsonl_path, "a", buffering=1)
-        except Exception as e:
-            self._log_error_once("event writer failed to open", e)
+        f = self._open_log_file(current_day)
+        if f is None:
             return
         while not self._stop.is_set() or not self._q.empty():
             today = datetime.utcnow().strftime("%Y%m%d")
             if today != current_day:
                 try:
                     f.close()
-                    rolled_path = os.path.join(self.run_dir, f"events-{current_day}.jsonl")
-                    os.replace(self.jsonl_path, rolled_path)
-                except Exception as e:
-                    self._log_error_once("event log rotation failed", e)
-                try:
-                    f = open(self.jsonl_path, "a", buffering=1)
-                    current_day = today
-                except Exception as e:
-                    self._log_error_once("event writer failed to open", e)
+                except Exception:
+                    pass
+                current_day = today
+                f = self._open_log_file(current_day)
+                if f is None:
                     break
             try:
                 evt = self._q.get(timeout=0.25)
