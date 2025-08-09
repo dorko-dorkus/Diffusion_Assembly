@@ -19,7 +19,7 @@ from statsmodels.genmod.cov_struct import Exchangeable
 try:  # RDKit is optional and may not be installed in every environment.
     from rdkit import Chem
     from rdkit.Chem.Scaffolds import MurckoScaffold
-except Exception:  # pragma: no cover - exercised only when RDKit is missing
+except ImportError:  # pragma: no cover - exercised only when RDKit is missing
     Chem = None
     MurckoScaffold = None
 

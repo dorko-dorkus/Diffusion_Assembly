@@ -149,7 +149,7 @@ class MoleculeGraph:
                 [list(conf.GetAtomPosition(i)) for i in range(n)],
                 dtype=torch.float32,
             )
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
         return MoleculeGraph(atoms, bonds, coords)
 
@@ -199,7 +199,7 @@ class MoleculeGraph:
         try:
             self.to_rdkit()
             return True
-        except Exception:
+        except (ValueError, RuntimeError):
             return False
 
     def apply_edit(self, i: int, j: int, b: int | None) -> "MoleculeGraph":

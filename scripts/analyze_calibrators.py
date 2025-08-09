@@ -41,7 +41,7 @@ def bootstrap_ci(df: pd.DataFrame, alpha: float = 0.05, B: int = 1000) -> Tuple[
         try:
             m, c, r2 = fit_logfreq_vs_A(resampled)
             m_vals.append(m)
-        except Exception:
+        except (ValueError, RuntimeError):
             continue
     m_vals = np.array(m_vals)
     lo = np.quantile(m_vals, alpha/2)

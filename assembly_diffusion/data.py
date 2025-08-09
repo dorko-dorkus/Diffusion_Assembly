@@ -2,6 +2,7 @@ import hashlib
 import os
 import tarfile
 import urllib.request
+import urllib.error
 import hashlib
 import logging
 
@@ -52,7 +53,7 @@ def download_qm9(
         logger.info("Downloading QM9 dataset.")
         try:
             urllib.request.urlretrieve(url, archive_path)
-        except Exception as e:  # pragma: no cover - network failure
+        except (urllib.error.URLError, OSError) as e:  # pragma: no cover - network failure
             raise RuntimeError(f"Failed to download QM9 dataset: {e}") from e
         if not _verify_sha256(archive_path, sha256):
             raise RuntimeError("Checksum mismatch for downloaded QM9 archive.")

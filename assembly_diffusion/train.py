@@ -120,13 +120,13 @@ def train_epoch(
         if monitor and (step_in_epoch % 50 == 0):
             try:
                 monitor.scalar("loss/train", float(batch_loss.detach().cpu()), step=step_in_epoch)
-            except Exception:
+            except (RuntimeError, OSError):
                 pass
         if monitor and (step_in_epoch % 100 == 0):
             try:
                 smi = xt_graphs[0].canonical_smiles()
                 monitor.sample_smiles([smi], step=step_in_epoch)
-            except Exception:
+            except (ValueError, RuntimeError):
                 pass
 
         if monitor and (time.time() - last_poke_check) > 5:

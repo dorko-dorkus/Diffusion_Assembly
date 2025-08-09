@@ -15,7 +15,7 @@ try:
     from rdkit.Chem import AllChem, QED, rdMolDescriptors
 
     _HAVE_RDKIT = True
-except Exception:
+except ImportError:
     _HAVE_RDKIT = False
 
 # The evaluation pipeline can optionally leverage the diffusion sampler defined
@@ -24,14 +24,14 @@ except Exception:
 # dependencies are unavailable.
 try:  # pragma: no cover - optional dependency
     from assembly_diffusion.sampler import Sampler
-except Exception:
+except ImportError:
     Sampler = None
 
 # Optional helper used for novelty computation.  Absence of the dataset loader
 # simply disables the novelty metric.
 try:  # pragma: no cover - optional dependency
     from assembly_diffusion.data import load_qm9_chon
-except Exception:
+except ImportError:
     load_qm9_chon = None
 
 # Surrogate and Monte-Carlo based AI estimators used for scoring.
@@ -39,7 +39,7 @@ try:  # pragma: no cover - optional dependency
     from assembly_diffusion.ai_surrogate import AISurrogate
     from assembly_diffusion.ai_mc import AssemblyMC
     from assembly_diffusion.graph import MoleculeGraph
-except Exception:
+except ImportError:
     AISurrogate = None
     AssemblyMC = None
     MoleculeGraph = None
@@ -72,7 +72,7 @@ def _canonicalize(smiles: Iterable[str]) -> Tuple[List[str], List[bool]]:
             can = Chem.MolToSmiles(mol, isomericSmiles=True, canonical=True)
             out.append(can)
             valid_mask.append(True)
-        except Exception:
+        except (ValueError, Chem.rdchem.KekulizeException):
             out.append("")
             valid_mask.append(False)
     return out, valid_mask
@@ -141,9 +141,9 @@ def _novelty(
         for g in ref_graphs:
             try:
                 ref.append(g.canonical_smiles())
-            except Exception:
+            except (ValueError, RuntimeError):
                 continue
-    except Exception:
+    except (OSError, RuntimeError):
         ref = []
     ref_set = set(ref)
     nov = [s for s in valid_canonical if s and s not in ref_set]
@@ -163,7 +163,7 @@ def _qed_sa(valid_smiles: List[str]) -> Tuple[float, float]:
             continue
         try:
             qed_scores.append(float(QED.qed(mol)))
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
         try:
             sa = (
@@ -172,7 +172,7 @@ def _qed_sa(valid_smiles: List[str]) -> Tuple[float, float]:
                 + rdMolDescriptors.CalcNumSpiroAtoms(mol)
             )
             sa_scores.append(float(sa))
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
     qed = sum(qed_scores) / len(qed_scores) if qed_scores else 0.0
     sa = sum(sa_scores) / len(sa_scores) if sa_scores else 0.0
@@ -212,7 +212,7 @@ def _score_ai_exact(
             graph = MoleculeGraph.from_rdkit(mol)
             ai = mc.estimate(graph)
             out.append(float(ai))
-        except Exception:
+        except (ValueError, RuntimeError):
             out.append(None)
         if (i + 1) % 500 == 0:
             logger.info(
@@ -254,7 +254,7 @@ def _score_ai_surrogate(smiles: List[str], ckpt_path: str) -> List[Optional[floa
                 mol = Chem.MolFromSmiles(s)
                 graph = MoleculeGraph.from_rdkit(mol)
                 out.append(float(surrogate.score(graph)))
-            except Exception:
+            except (ValueError, RuntimeError):
                 out.append(None)
         else:
             out.append(float(len(s)))
@@ -285,7 +285,7 @@ def _calibrate_ai_surrogate(
 
     try:
         dataset = load_qm9_chon()
-    except Exception:
+    except (OSError, RuntimeError):
         dataset = []
 
     random.Random(0).shuffle(dataset)
@@ -298,7 +298,7 @@ def _calibrate_ai_surrogate(
             ai_exact = mc.ai(g) if hasattr(mc, "ai") else mc.estimate(g)
             ai_surr = surrogate.score(g)
             errors.append(abs(ai_surr - ai_exact))
-        except Exception:
+        except (ValueError, RuntimeError):
             continue
 
     if quantiles is None:
@@ -347,7 +347,7 @@ def run_pipeline(
             try:
                 g = sampler_obj.sample(steps)
                 smiles.append(g.canonical_smiles())
-            except Exception:
+            except (ValueError, RuntimeError):
                 smiles.append(None)
     else:
         # Deterministic fallback used in tests: generate short carbon chains.
