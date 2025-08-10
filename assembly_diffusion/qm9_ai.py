@@ -17,6 +17,14 @@ except ImportError:  # pragma: no cover - handled at runtime
     MurckoScaffold = None
     MolSanitizeException = RuntimeError
 
+
+def _require_rdkit() -> None:
+    """Raise an informative error if RDKit is unavailable."""
+    if Chem is None or Descriptors is None or rdMolDescriptors is None or MurckoScaffold is None:
+        raise ImportError(
+            "RDKit is required for QM9 annotations. Install it via 'conda install -c conda-forge rdkit'."
+        )
+
 from .data import load_qm9_chon, DEFAULT_DATA_DIR
 from .ai_surrogate import AISurrogate
 from .ai_mc import AssemblyMC
@@ -24,6 +32,7 @@ from .ai_mc import AssemblyMC
 
 def _descriptor_vec(mol: "Chem.Mol") -> List[float]:
     """Return a vector of six basic RDKit descriptors."""
+    _require_rdkit()
     return [
         Descriptors.MolWt(mol),
         Descriptors.MolLogP(mol),
@@ -53,6 +62,7 @@ def generate_qm9_chon_ai(
     rows = []
     for graph in dataset:
         try:
+            _require_rdkit()
             mol = graph.to_rdkit()
             smiles = Chem.MolToSmiles(mol, canonical=True)
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol)
