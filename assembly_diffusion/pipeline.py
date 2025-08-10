@@ -9,6 +9,7 @@ from typing import Iterable, List, Tuple, Optional, Dict, Any
 import numpy as np
 
 from .logging_config import get_logger
+from .stats import summarise_A_hat
 
 # Try RDKit early to fail fast when metrics require it
 try:
@@ -153,17 +154,6 @@ def _novelty(
     nov = [s for s in valid_canonical if s and s not in ref_set]
     denom = len([s for s in valid_canonical if s])
     return float(len(nov)) / float(denom) if denom > 0 else 0.0
-
-def _median(values: List[float]) -> float:
-    if not values:
-        return 0.0
-    vs = sorted(values)
-    n = len(vs)
-    mid = n // 2
-    if n % 2 == 1:
-        return float(vs[mid])
-    return float(0.5 * (vs[mid - 1] + vs[mid]))
-
 
 def _score_ai_exact(
     smiles: List[str], grammar: str, timeout_s: Optional[float] = None
@@ -401,8 +391,7 @@ def run_pipeline(
         sa_mean = 0.0
         sa_median = 0.0
 
-    # 4) Assembly index scoring and median
-    median_ai = 0.0
+    # 4) Assembly index scoring and summary statistics
     ai_scores: List[Optional[float]] = []
     ai_cfg = cfg.get("ai", {})
     scorer = ai_cfg.get("scorer", "exact")
@@ -427,9 +416,8 @@ def run_pipeline(
             for s, a in zip(ai_inputs, ai_scores):
                 f.write(f"{s},{'' if a is None else a}\n")
 
-    # Median AI over non-null scores
-    ai_clean = [float(a) for a in ai_scores if a is not None]
-    median_ai = _median(ai_clean)
+    # Summary statistics over scores
+    ai_stats = summarise_A_hat(ai_scores)
 
     # Surrogate calibration on QM9 subset
     cal_cfg = ai_cfg.get("calibration", {})
@@ -465,7 +453,9 @@ def run_pipeline(
         "sa_mean_ci": _ci_placeholder(sa_mean),
         "sa_median": float(sa_median),
         "sa_median_ci": _ci_placeholder(sa_median),
-        "median_ai": float(median_ai),
-        "median_ai_ci": _ci_placeholder(median_ai),
     }
+
+    for key, val in ai_stats.items():
+        metrics[key] = float(val)
+        metrics[f"{key}_ci"] = _ci_placeholder(val)
     return metrics, flags

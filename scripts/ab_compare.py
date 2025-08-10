@@ -29,7 +29,7 @@ if __name__ == "__main__":
         "validity_delta": mB["valid_fraction"] - mA["valid_fraction"],
         "uniqueness_delta": mB["uniqueness"] - mA["uniqueness"],
         "diversity_delta": mB["diversity"] - mA["diversity"],
-        "median_AI_delta": mB["median_ai"] - mA["median_ai"],
+        "A_hat_median_delta": mB["A_hat_median"] - mA["A_hat_median"],
     }
 
     rows = []
@@ -37,7 +37,7 @@ if __name__ == "__main__":
         ("valid_fraction", "Validity"),
         ("uniqueness", "Uniqueness"),
         ("diversity", "Diversity"),
-        ("median_ai", "Median AI"),
+        ("A_hat_median", "Median A_hat"),
     ]
     for key, label in metrics:
         delta = mB[key] - mA[key]
