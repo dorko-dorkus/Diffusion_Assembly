@@ -31,6 +31,8 @@ from analysis import (
     sensitivity_over_lambda,
     error_quantiles,
     calibration_curve,
+    train_val_test_split,
+    early_stopping,
 )
 
 
@@ -90,3 +92,24 @@ def test_calibration_curve():
     # First bin contains two lowest points with mean pred 0.5 and mean true 0.25
     assert curve["pred_mean"][0] == pytest.approx(0.5)
     assert curve["true_mean"][0] == pytest.approx(0.25)
+
+
+def test_train_val_test_split():
+    data = np.arange(20)
+    train, val, test = train_val_test_split(
+        data, train_size=0.6, val_size=0.2, test_size=0.2, random_state=0
+    )
+    assert len(train) == 12
+    assert len(val) == 4
+    assert len(test) == 4
+    assert set(train).isdisjoint(set(val))
+    assert set(train).isdisjoint(set(test))
+    assert set(val).isdisjoint(set(test))
+    all_parts = np.concatenate((train, val, test))
+    assert sorted(all_parts.tolist()) == list(data)
+
+
+def test_early_stopping():
+    history = [0.5, 0.6, 0.6, 0.59, 0.58]
+    assert early_stopping(history, patience=2)
+    assert not early_stopping(history[:3], patience=2)
