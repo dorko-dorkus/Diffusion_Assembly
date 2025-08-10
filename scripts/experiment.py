@@ -5,7 +5,11 @@ baseline: the default configuration and its reference metrics act as
 data_sources: experiment settings and model paths are loaded from
     ``configs/registry.yaml`` along with generated artifacts.
 metrics: pipeline evaluation statistics are written via
-    ``metrics_writer`` such as validity and AI score summaries.
+    ``metrics_writer`` such as validity and AI score summaries. Classification
+    quality follows the F1 score ``F1 = 2 * precision * recall / (precision +
+    recall)`` while regression error uses the mean squared error
+    ``MSE = (1/N) * Σ_i (y_i - ŷ_i)^2``.  When multiple random seeds are run the
+    results should be reported as ``mean ± std`` across seeds.
 objective: execute a single experiment and persist a manifest with
     environment details for downstream analysis.
 validation: smoke tests like ``tests/test_pipeline_smoke.py`` ensure the

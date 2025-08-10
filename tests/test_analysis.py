@@ -8,7 +8,11 @@ method: invoke functions from :mod:`analysis` to compute statistical
     comparisons and diversity metrics.
 metrics: Kolmogorov–Smirnov p-values, scaffold counts, regression
     parameters, bootstrap medians, sensitivity medians, error quantiles and
-    calibration curves.
+    calibration curves. Classification quality uses the F1 score
+    ``F1 = 2 * precision * recall / (precision + recall)`` while regression error
+    is measured by the mean squared error ``MSE = (1/N) * Σ_i (y_i - ŷ_i)^2``.
+    When results are aggregated over multiple random seeds they should be
+    reported as ``mean ± std``.
 objective: verify the analysis utilities produce correct and stable
     statistics across a range of scenarios.
 params: tests exercise options such as bootstrap iterations, quantiles and
