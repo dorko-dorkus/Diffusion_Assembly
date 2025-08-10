@@ -5,7 +5,10 @@ data_sources: QM9-CHON subset provided in :mod:`qm9_chon_ai.csv`.
 method: invoke :func:`assembly_diffusion.cli.main` to parse registry
     configuration and run the experiment pipeline.
 metrics: each run writes ``metrics.json`` with validity, assembly index and
-    related scores.
+    related scores. Classification quality uses the F1 score
+    ``F1 = 2 * TP / (2 * TP + FP + FN)`` while regression error is measured
+    with the mean squared error ``MSE = \frac{1}{N} \sum (y_i - \hat{y}_i)^2``.
+    Results across multiple random seeds are reported as ``mean ± std``.
 objective: demonstrate launching and evaluating a configured experiment.
 params: experiment parameters come from ``configs/registry.yaml`` and any CLI
     overrides.
