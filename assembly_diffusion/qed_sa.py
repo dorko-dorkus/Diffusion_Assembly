@@ -3,21 +3,28 @@ from __future__ import annotations
 
 from functools import lru_cache
 from statistics import median
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem
     from rdkit.Chem import QED
-    from .sascorer import calculateScore as sa_score
 except ImportError:  # pragma: no cover - handled at runtime
     Chem = None
     QED = None
+
+try:  # pragma: no cover - optional SA scorer
+    from .sascorer import calculateScore as sa_score
+except Exception:  # pragma: no cover - handled at runtime
     sa_score = None
+
+_HAVE_QED = Chem is not None and QED is not None
+_HAVE_SA = Chem is not None and sa_score is not None
 
 
 @lru_cache(maxsize=None)
 def _qed_from_smiles(smiles: str) -> Optional[float]:
-    if Chem is None or QED is None:
+    """Return the QED score for ``smiles`` or ``None`` if unavailable."""
+    if not _HAVE_QED:
         return None
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
@@ -30,7 +37,8 @@ def _qed_from_smiles(smiles: str) -> Optional[float]:
 
 @lru_cache(maxsize=None)
 def _sa_from_smiles(smiles: str) -> Optional[float]:
-    if Chem is None or sa_score is None:
+    """Return the synthetic accessibility score or ``None`` if unavailable."""
+    if not _HAVE_SA:
         return None
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
@@ -45,11 +53,15 @@ def qed_sa_distribution(smiles: List[str]) -> Tuple[float, float, float, float]:
     """Return mean and median QED and SA scores for ``smiles``.
 
     The computation is cached per SMILES string to avoid recomputing scores
-    for duplicates.
+    for duplicates.  If RDKit is unavailable, zeros are returned for all
+    statistics.
     """
+    if not _HAVE_QED and not _HAVE_SA:
+        return 0.0, 0.0, 0.0, 0.0
+
     unique = {s for s in smiles if s}
-    qeds = []
-    sas = []
+    qeds: List[float] = []
+    sas: List[float] = []
     for s in unique:
         q = _qed_from_smiles(s)
         if q is not None:
