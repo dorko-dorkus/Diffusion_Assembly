@@ -66,7 +66,7 @@ def _qed_sa(smiles: List[str]) -> Tuple[float, float]:
             continue
         try:
             qeds.append(float(QED.qed(mol)))
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
         try:
             sa = (
@@ -75,7 +75,7 @@ def _qed_sa(smiles: List[str]) -> Tuple[float, float]:
                 + rdMolDescriptors.CalcNumSpiroAtoms(mol)
             )
             sas.append(float(sa))
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
     qed = sum(qeds) / len(qeds) if qeds else 0.0
     sa = sum(sas) / len(sas) if sas else 0.0

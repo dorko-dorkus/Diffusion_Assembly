@@ -11,12 +11,14 @@ from typing import List, Optional
 import torch
 from torch import Tensor
 
-try:
+try:  # pragma: no cover - RDKit optional
     from rdkit import Chem
     from rdkit.Chem import SanitizeMol
+    from rdkit.Chem.rdchem import MolSanitizeException
 except ImportError:  # pragma: no cover - handled at runtime
     Chem = None
     SanitizeMol = None
+    MolSanitizeException = RuntimeError
 
 
 # Basic valence caps used for fast feasibility checks.  These constants are
@@ -149,7 +151,7 @@ class MoleculeGraph:
                 [list(conf.GetAtomPosition(i)) for i in range(n)],
                 dtype=torch.float32,
             )
-        except Exception:
+        except (ValueError, RuntimeError):
             pass
         return MoleculeGraph(atoms, bonds, coords)
 
@@ -199,7 +201,7 @@ class MoleculeGraph:
         try:
             self.to_rdkit()
             return True
-        except Exception:
+        except (ValueError, RuntimeError, MolSanitizeException):
             return False
 
     def apply_edit(self, i: int, j: int, b: int | None) -> "MoleculeGraph":

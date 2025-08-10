@@ -17,14 +17,14 @@ logger = get_logger(__name__)
 
 try:
     from torch.utils.tensorboard import SummaryWriter
-except Exception:
+except ImportError:
     SummaryWriter = None
 
 # Optional resource monitoring dependencies.  These are best-effort and the
 # monitor will operate without them if unavailable.
 try:
     import psutil  # type: ignore
-except Exception:  # pragma: no cover - dependency not installed
+except ImportError:  # pragma: no cover - dependency not installed
     psutil = None  # type: ignore
 
 try:
@@ -32,9 +32,9 @@ try:
 
     try:
         pynvml.nvmlInit()
-    except Exception:  # pragma: no cover - GPU may be absent
+    except pynvml.NVMLError:  # pragma: no cover - GPU may be absent
         pynvml = None  # type: ignore
-except Exception:  # pragma: no cover - dependency not installed
+except ImportError:  # pragma: no cover - dependency not installed
     pynvml = None  # type: ignore
 
 
@@ -45,15 +45,15 @@ def _git_hash() -> str:
         return "unknown"
     try:
         return (
-            subprocess.check_output([
-                "git",
-                "rev-parse",
-                "HEAD",
-            ], stderr=subprocess.DEVNULL, cwd=repo_root)
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                cwd=repo_root,
+            )
             .decode()
             .strip()
         )
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         return "unknown"
 
 
@@ -101,13 +101,13 @@ class RunMonitor:
         try:
             with open(os.path.join(run_dir, "run_metadata.json"), "w") as f:
                 json.dump({"git_hash": self._git_hash, "config": self._config}, f)
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("metadata write failed", e)
         self.tb = None
         if use_tb and SummaryWriter:
             try:
                 self.tb = SummaryWriter(run_dir)
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 self._log_error_once("TensorBoard init failed", e)
         # Dedicated heartbeat thread for liveness reporting.
         self._hb_thread = threading.Thread(
@@ -130,7 +130,7 @@ class RunMonitor:
         try:
             signal.signal(signal.SIGUSR1, self._sig_dump)
             signal.signal(signal.SIGUSR2, self._sig_ckpt_req)
-        except Exception:
+        except (ValueError, AttributeError, OSError):
             pass
 
     def close(self) -> None:
@@ -142,13 +142,13 @@ class RunMonitor:
             try:
                 self.tb.flush()
                 self.tb.close()
-            except Exception:
+            except (OSError, RuntimeError):
                 pass
         # Gracefully shut down NVML if it was initialized.
         if pynvml:
             try:  # pragma: no cover - GPU-specific
                 pynvml.nvmlShutdown()
-            except Exception:
+            except pynvml.NVMLError:
                 pass
 
     # Public API
@@ -176,7 +176,7 @@ class RunMonitor:
         if self.tb:
             try:
                 self.tb.add_scalar(name, value, step)
-            except Exception as e:
+            except (RuntimeError, ValueError) as e:
                 self._log_error_once("TensorBoard add_scalar failed", e)
 
     def sample_smiles(self, smiles: list[str], step: int) -> None:
@@ -188,7 +188,7 @@ class RunMonitor:
                 f.write("# config: " + json.dumps(self._config) + "\n")
                 for s in smiles:
                     f.write(s + "\n")
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("sample_smiles write failed", e)
 
     def resources(
@@ -224,7 +224,7 @@ class RunMonitor:
             meta_path = path + ".meta.json"
             with open(meta_path, "w") as mf:
                 json.dump({"git_hash": self._git_hash, "config": self._config}, mf)
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("checkpoint metadata failed", e)
         self._event(
             "checkpoint",
@@ -248,14 +248,14 @@ class RunMonitor:
         if ckpt_req:
             try:
                 os.remove(self._ckpt_sentinel)
-            except Exception:
+            except OSError:
                 pass
             self._sig_ckpt_req()
 
         if dump_req:
             try:
                 os.remove(self._dump_sentinel)
-            except Exception:
+            except OSError:
                 pass
             self._sig_dump()
 
@@ -270,11 +270,11 @@ class RunMonitor:
         try:
             with open(err_path, "a") as ef:
                 ef.write(err + "\n")
-        except Exception:
+        except OSError:
             pass
         try:
             logger.error(err)
-        except Exception:
+        except Exception:  # pragma: no cover - logging failure is non-critical
             pass
         self._error_logged = True
 
@@ -291,7 +291,7 @@ class RunMonitor:
         if os.path.islink(self.jsonl_path):
             try:
                 os.unlink(self.jsonl_path)
-            except Exception:
+            except OSError:
                 pass
             return
         try:
@@ -299,7 +299,7 @@ class RunMonitor:
             file_day = mtime.strftime("%Y%m%d")
             rolled = os.path.join(self.run_dir, f"events-{file_day}.jsonl")
             os.replace(self.jsonl_path, rolled)
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("event log rotation failed", e)
 
     def _open_log_file(self, day: str):
@@ -307,7 +307,7 @@ class RunMonitor:
         path = os.path.join(self.run_dir, f"events-{day}.jsonl")
         try:
             f = open(path, "a", buffering=1)
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("event writer failed to open", e)
             return None
         try:
@@ -318,11 +318,11 @@ class RunMonitor:
                 pass
             os.symlink(os.path.basename(path), tmp_link)
             os.replace(tmp_link, self.jsonl_path)
-        except Exception:
+        except OSError:
             try:
                 if os.path.islink(tmp_link):
                     os.unlink(tmp_link)
-            except Exception:
+            except OSError:
                 pass
             # Best effort; if symlinks are unsupported fall back to using the
             # plain filename.
@@ -331,7 +331,7 @@ class RunMonitor:
                 path = self.jsonl_path
                 f.close()
                 f = open(path, "a", buffering=1)
-            except Exception as e:
+            except OSError as e:
                 self._log_error_once("event writer failed to open", e)
                 return None
         return f
@@ -371,7 +371,7 @@ class RunMonitor:
             if today != current_day:
                 try:
                     f.close()
-                except Exception:
+                except OSError:
                     pass
                 current_day = today
                 f = self._open_log_file(current_day)
@@ -383,11 +383,11 @@ class RunMonitor:
                 continue
             try:
                 f.write(json.dumps(evt) + "\n")
-            except Exception as e:
+            except OSError as e:
                 self._log_error_once("event write failed", e)
         try:
             f.close()
-        except Exception:
+        except OSError:
             pass
 
     def _write_heartbeat(self) -> None:
@@ -402,7 +402,7 @@ class RunMonitor:
         try:
             with open(self.heartbeat_path, "w") as f:
                 json.dump(hb, f)
-        except Exception as e:
+        except OSError as e:
             self._log_error_once("heartbeat write failed", e)
 
     def _heartbeat_loop(self) -> None:
@@ -423,7 +423,7 @@ class RunMonitor:
                 mem = pynvml.nvmlDeviceGetMemoryInfo(dev)
                 gpu_util = float(util.gpu)
                 vram = float(mem.used / 1e9)
-            except Exception:
+            except pynvml.NVMLError:
                 pass
         return cpu, ram, vram, gpu_util
 

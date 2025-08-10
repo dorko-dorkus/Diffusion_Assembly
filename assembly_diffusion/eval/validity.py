@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from ..graph import MoleculeGraph
 
+try:  # pragma: no cover - RDKit optional
+    from rdkit.Chem.rdchem import MolSanitizeException
+except ImportError:  # pragma: no cover - handled at runtime
+    MolSanitizeException = RuntimeError
 
 
 def sanitize_or_none(graph: MoleculeGraph):
@@ -22,7 +26,7 @@ def sanitize_or_none(graph: MoleculeGraph):
 
     try:
         return graph.to_rdkit()
-    except Exception:
+    except (ValueError, RuntimeError, MolSanitizeException):
         return None
 
 
