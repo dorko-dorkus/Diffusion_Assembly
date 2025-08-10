@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem
@@ -17,6 +18,9 @@ try:  # pragma: no cover - optional dependencies
 except ImportError:  # pragma: no cover - handled at runtime
     AISurrogate = None
     AssemblyIndex = None
+
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -46,7 +50,7 @@ def main() -> None:
         metrics.update({f"exact_{k}": v for k, v in summarise_A_hat(e_scores).items()})
 
     if args.print_metrics:
-        print(metrics)
+        logger.info(metrics)
 
 
 if __name__ == "__main__":
