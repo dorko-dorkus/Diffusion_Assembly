@@ -9,11 +9,13 @@ try:  # pragma: no cover - optional rdkit dependency
     from rdkit import Chem
     from rdkit.Chem import Descriptors, rdMolDescriptors
     from rdkit.Chem.Scaffolds import MurckoScaffold
+    from rdkit.Chem.rdchem import MolSanitizeException
 except ImportError:  # pragma: no cover - handled at runtime
     Chem = None
     Descriptors = None
     rdMolDescriptors = None
     MurckoScaffold = None
+    MolSanitizeException = RuntimeError
 
 from .data import load_qm9_chon, DEFAULT_DATA_DIR
 from .ai_surrogate import AISurrogate
@@ -42,7 +44,7 @@ def generate_qm9_chon_ai(
 
     try:
         dataset = load_qm9_chon(max_heavy=max_heavy, data_dir=data_dir)
-    except Exception:  # pragma: no cover - dependency missing
+    except (ImportError, RuntimeError, OSError):  # pragma: no cover - dependency missing
         dataset = []
 
     surrogate = AISurrogate()
@@ -55,7 +57,7 @@ def generate_qm9_chon_ai(
             smiles = Chem.MolToSmiles(mol, canonical=True)
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol)
             desc = _descriptor_vec(mol)
-        except Exception:
+        except (ImportError, ValueError, RuntimeError, MolSanitizeException):
             smiles = "".join(graph.atoms)
             scaffold = "NA"
             desc = [0.0] * 6

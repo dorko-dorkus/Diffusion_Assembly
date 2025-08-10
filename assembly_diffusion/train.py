@@ -119,15 +119,17 @@ def train_epoch(
             monitor.tick(step=step_in_epoch, total=total_steps)
         if monitor and (step_in_epoch % 50 == 0):
             try:
-                monitor.scalar("loss/train", float(batch_loss.detach().cpu()), step=step_in_epoch)
-            except Exception:
-                pass
+                monitor.scalar(
+                    "loss/train", float(batch_loss.detach().cpu()), step=step_in_epoch
+                )
+            except (RuntimeError, ValueError, OSError) as e:
+                logger.debug("monitor.scalar failed: %s", e)
         if monitor and (step_in_epoch % 100 == 0):
             try:
                 smi = xt_graphs[0].canonical_smiles()
                 monitor.sample_smiles([smi], step=step_in_epoch)
-            except Exception:
-                pass
+            except (RuntimeError, ValueError, OSError) as e:
+                logger.debug("monitor.sample_smiles failed: %s", e)
 
         if monitor and (time.time() - last_poke_check) > 5:
             ckpt_req, dump_req = monitor.poll()
