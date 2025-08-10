@@ -1,4 +1,6 @@
 import json
+import logging
+
 import pandas as pd
 import torch
 
@@ -9,6 +11,13 @@ from assembly_diffusion.backbone import GNNBackbone
 from assembly_diffusion.policy import ReversePolicy
 from assembly_diffusion.sampler import Sampler
 from assembly_diffusion.guidance import AssemblyPrior
+
+try:  # pragma: no cover - RDKit optional
+    from rdkit.Chem.rdchem import MolSanitizeException
+except ImportError:  # pragma: no cover - handled at runtime
+    MolSanitizeException = RuntimeError
+
+logger = logging.getLogger(__name__)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -49,7 +58,8 @@ def main():
             x = sampler.sample(kernel.T, x_init, guidance=guide, gamma=1.0)
             try:
                 smiles = x.canonical_smiles()
-            except Exception:
+            except (ImportError, ValueError, RuntimeError, MolSanitizeException) as exc:
+                logger.warning("Failed to generate SMILES: %s", exc)
                 smiles = None
             records.append(
                 {
