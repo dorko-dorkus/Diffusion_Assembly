@@ -5,7 +5,7 @@ ARG PYVER=3.11
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 # Create the base environment with RDKit available
-RUN micromamba create -y -n app -c conda-forge python=${PYVER} rdkit=2023.09.* \
+RUN micromamba create -y -n app -c conda-forge python=${PYVER} rdkit=2024.09.6 \
  && micromamba clean -a -y
 
 WORKDIR /app

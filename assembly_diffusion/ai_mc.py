@@ -6,25 +6,34 @@ import random
 try:
     from rdkit import Chem
     from rdkit.Chem import BRICS
-except ImportError:
-    Chem = None
-    BRICS = None
+except ImportError:  # pragma: no cover - exercised when RDKit is absent
+    Chem = None  # type: ignore[assignment]
+    BRICS = None  # type: ignore[assignment]
 
 from .graph import MoleculeGraph
 
 
+def _require_rdkit() -> None:
+    """Raise an informative error if RDKit is unavailable."""
+    if Chem is None:  # pragma: no cover - exercised when RDKit is absent
+        raise ImportError("RDKit is required for molecule operations")
+
+
 def _mol_from_graph(g: MoleculeGraph) -> "Chem.Mol":
+    _require_rdkit()
     return g.to_rdkit()
 
 
 def _canon(sm: "Chem.Mol") -> str:
+    _require_rdkit()
     # Canonical, include isotopes to preserve multiplicity cues if present
     return Chem.MolToSmiles(sm, isomericSmiles=True)
 
 
 def _brics_cuts(mol: "Chem.Mol") -> List[Tuple[int, int]]:
+    _require_rdkit()
     # return list of bond indices (begin,end) that are valid BRICS cuts
-    bonds = []
+    bonds: List[Tuple[int, int]] = []
     for b in mol.GetBonds():
         if b.IsInRing():  # Cronin normally allows ring cuts via BRICS; be conservative by default
             continue
@@ -37,7 +46,10 @@ def _brics_cuts(mol: "Chem.Mol") -> List[Tuple[int, int]]:
     return bonds
 
 
-def _split_on_bond(mol: "Chem.Mol", i: int, j: int) -> Optional[Tuple["Chem.Mol", "Chem.Mol"]]:
+def _split_on_bond(
+    mol: "Chem.Mol", i: int, j: int
+) -> Optional[Tuple["Chem.Mol", "Chem.Mol"]]:
+    _require_rdkit()
     em = Chem.EditableMol(Chem.Mol(mol))
     b = mol.GetBondBetweenAtoms(i, j)
     if b is None:
