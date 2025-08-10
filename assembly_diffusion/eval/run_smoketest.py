@@ -5,7 +5,10 @@ data_sources: inline SMILES strings ``["CCO", "CCN", "CCC"]`` parsed by RDKit.
 method: convert SMILES to :class:`~assembly_diffusion.graph.MoleculeGraph`
     instances and evaluate using :class:`~assembly_diffusion.eval.metrics.Metrics`.
 metrics: validity and assembly index summaries plus optional surrogate and
-    exact assembly index statistics.
+    exact assembly index statistics.  Additional reference metrics follow the
+    standard definitions ``F1 = 2 * precision * recall / (precision + recall)``
+    and ``MSE = (1/N) * Σ_i (ŷ_i - y_i)^2``.  All metrics should be reported as
+    ``mean ± std`` computed over independent random seeds.
 objective: exercise the metrics stack to ensure all components integrate.
 repro: deterministic because inputs are hard coded and all randomness fixed.
 validation: script runs without error and optional ``--print-metrics`` output
