@@ -23,12 +23,74 @@ repro: given the same graph and RDKit version, sanitization results are
 
 from __future__ import annotations
 
+import platform
+import random
+import subprocess
+from pathlib import Path
+from importlib import metadata
+
 from ..graph import MoleculeGraph
+from ..logging_config import get_logger
 
 try:  # pragma: no cover - RDKit optional
     from rdkit.Chem.rdchem import MolSanitizeException
 except ImportError:  # pragma: no cover - handled at runtime
     MolSanitizeException = RuntimeError
+
+
+logger = get_logger(__name__)
+
+
+def _git_hash() -> str:
+    """Return the current git commit hash or ``"unknown"``."""
+
+    repo_root = Path(__file__).resolve().parents[2]
+    if not (repo_root / ".git").exists():
+        return "unknown"
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                cwd=repo_root,
+            )
+            .decode()
+            .strip()
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return "unknown"
+
+
+def configure_reproducibility(seed: int) -> None:
+    """Set random seeds and log environment and version information."""
+
+    random.seed(seed)
+    try:
+        import numpy as np  # type: ignore
+
+        np.random.seed(seed)
+    except Exception:  # pragma: no cover - optional dependency
+        pass
+    try:
+        import torch  # type: ignore
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():  # pragma: no cover - GPU optional
+            torch.cuda.manual_seed_all(seed)
+    except Exception:  # pragma: no cover - optional dependency
+        pass
+
+    logger.info("Random seed set to %d", seed)
+    logger.info("Python %s on %s", platform.python_version(), platform.platform())
+
+    for pkg in ("rdkit", "numpy", "torch"):
+        try:
+            ver = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            ver = "not installed"
+        logger.info("%s version: %s", pkg, ver)
+
+    logger.info("Git commit SHA: %s", _git_hash())
 
 
 def sanitize_or_none(graph: MoleculeGraph):
