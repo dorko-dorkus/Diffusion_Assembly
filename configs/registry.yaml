@@ -1,8 +1,9 @@
 ## Experiment registry
 # The ``ai.scorer`` key selects how assembly indices are evaluated:
 #   - ``exact``: compute the true assembly index via the Monte-Carlo estimator.
-#   - ``surrogate``: use the fast heuristic surrogate model.  Control runs tweak
-#     the surrogate behaviour through the optional ``ai.mode`` field.
+#   - ``surrogate``: use the fast heuristic surrogate model.  ``ai.surrogate_ckpt``
+#     must point to a checkpoint and is ignored when ``ai.scorer`` is ``exact``.
+#     Control runs tweak the surrogate behaviour through the optional ``ai.mode`` field.
 experiments:
   exp01_baseline:
     description: "Unguided surrogate baseline on QM9-CHON, matched sampler settings."
