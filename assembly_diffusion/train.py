@@ -1,3 +1,22 @@
+"""Training utilities for the diffusion policy network.
+
+baseline: standard teacher-forced cross-entropy training without additional
+    heuristics or guidance.
+data_sources: batched atom and bond tensors from datasets such as the
+    QM9-CHON subset provided by the data loader.
+method: sample a timestep, generate ``G_t`` via :class:`~assembly_diffusion.forward.ForwardKernel`,
+    compute logits from :class:`~assembly_diffusion.policy.ReversePolicy` under
+    feasibility masks and optimise using cross-entropy with optional entropy
+    regularisation.
+metrics: average loss and accuracy over the epoch.
+objective: learn a policy that predicts edits transforming noisy graphs back
+    toward ground-truth molecules.
+repro: deterministic seeds, saved checkpoints and committed configs enable
+    reproducible training runs.
+validation: unit tests plus optional :class:`~assembly_diffusion.monitor.RunMonitor`
+    checkpoints verify correct behaviour of the training loop.
+"""
+
 import os
 import random
 import time
