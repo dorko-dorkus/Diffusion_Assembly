@@ -2,14 +2,18 @@
 """Validate experiment registry for label-to-scorer consistency."""
 from __future__ import annotations
 
+import logging
 import re
-import sys
 from pathlib import Path
 
 import yaml
 
 
+logger = logging.getLogger(__name__)
+
+
 def main() -> None:
+    logging.basicConfig(level=logging.INFO)
     registry_path = Path(__file__).resolve().parent.parent / "configs" / "registry.yaml"
     data = yaml.safe_load(registry_path.read_text())
     experiments = data.get("experiments", {})
@@ -25,10 +29,10 @@ def main() -> None:
 
     if errors:
         for err in errors:
-            print(f"ERROR: {err}", file=sys.stderr)
-        sys.exit(1)
+            logger.error(err)
+        raise SystemExit(1)
 
-    print("Registry OK")
+    logger.info("Registry OK")
 
 
 if __name__ == "__main__":
