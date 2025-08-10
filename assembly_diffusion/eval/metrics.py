@@ -24,7 +24,11 @@ from __future__ import annotations
 SCHEMA_VERSION = "1.1.0"
 
 import random
+import platform
+import subprocess
+from pathlib import Path
 from typing import Iterable, Sequence, Set, List, Any, Tuple, Optional
+from importlib import metadata
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem, DataStructs
@@ -39,6 +43,62 @@ except ImportError:  # pragma: no cover - handled at runtime
 from ..graph import MoleculeGraph
 from .validity import sanitize_or_none
 from ..ai_surrogate import AISurrogate
+from ..logging_config import get_logger
+
+
+logger = get_logger(__name__)
+
+
+def _git_hash() -> str:
+    """Return the current git commit hash or ``"unknown"``."""
+
+    repo_root = Path(__file__).resolve().parents[2]
+    if not (repo_root / ".git").exists():
+        return "unknown"
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                cwd=repo_root,
+            )
+            .decode()
+            .strip()
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return "unknown"
+
+
+def _configure_reproducibility(seed: int) -> None:
+    """Set random seeds and log environment and version information."""
+
+    random.seed(seed)
+    try:
+        import numpy as np  # type: ignore
+
+        np.random.seed(seed)
+    except Exception:  # pragma: no cover - optional dependency
+        pass
+    try:
+        import torch  # type: ignore
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():  # pragma: no cover - GPU optional
+            torch.cuda.manual_seed_all(seed)
+    except Exception:  # pragma: no cover - optional dependency
+        pass
+
+    logger.info("Random seed set to %d", seed)
+    logger.info("Python %s on %s", platform.python_version(), platform.platform())
+
+    for pkg in ("rdkit", "numpy", "torch"):
+        try:
+            ver = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            ver = "not installed"
+        logger.info("%s version: %s", pkg, ver)
+
+    logger.info("Git commit SHA: %s", _git_hash())
 
 
 
@@ -153,6 +213,7 @@ class Metrics:
     def evaluate(
         sample_set: Sequence[MoleculeGraph],
         reference_smiles: Iterable[str],
+        seed: int = 0,
     ) -> dict[str, float]:
         """Return RDKit-based metrics for ``sample_set``.
 
@@ -162,10 +223,15 @@ class Metrics:
         over ECFP4 fingerprints), ``novelty`` against the provided
         ``reference_smiles``, and distribution summaries for RDKit ``qed``
         and synthetic accessibility ``sa`` scores.
+        seed: int, optional
+            Random seed used for deterministic operations and environment
+            logging. Defaults to ``0``.
         """
 
         if Chem is None:
             raise RuntimeError("RDKit required for metric evaluate")
+
+        _configure_reproducibility(seed)
         total = len(sample_set)
         if total == 0:
             return {
