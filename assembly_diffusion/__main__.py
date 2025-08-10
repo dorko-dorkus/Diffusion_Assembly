@@ -20,6 +20,8 @@ validation: experiments rely on an 80/10/10 train/validation/test split with
 """
 
 from .cli import main
+from .repro import setup_reproducibility
 
 if __name__ == "__main__":
+    setup_reproducibility(0)
     main()
