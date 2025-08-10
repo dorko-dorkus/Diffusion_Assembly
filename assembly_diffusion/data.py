@@ -8,6 +8,11 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
+try:  # pragma: no cover - RDKit is optional
+    from rdkit.Chem import rdmolfiles
+except ImportError:  # pragma: no cover - handled at runtime
+    rdmolfiles = None
+
 from .graph import MoleculeGraph
 from .backbone import ATOM_MAP
 from .logging_config import get_logger
@@ -17,6 +22,14 @@ logger = get_logger(__name__)
 URL = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/gdb9.tar.gz"
 QM9_SHA256 = "45255048ac6d83ea4b923ecdf7d6fb6dc62bfec5e80fbc5bcfd93a62157a31db"
 DEFAULT_DATA_DIR = os.environ.get("QM9_DATA_DIR", "qm9_raw")
+
+
+def _require_rdkit() -> None:
+    """Raise an informative error if RDKit is unavailable."""
+    if rdmolfiles is None:  # pragma: no cover - exercised when RDKit missing
+        raise ImportError(
+            "RDKit is required to load QM9 data. Install it, e.g., via 'conda install -c conda-forge rdkit'."
+        )
 
 
 def _verify_sha256(path: str, expected: str) -> bool:
@@ -88,18 +101,7 @@ def load_qm9_chon(
         Filtered molecules represented as :class:`MoleculeGraph` objects.
     """
 
-    try:
-        import torch
-    except ImportError as e:  # pragma: no cover - runtime check
-        raise ImportError(
-            "PyTorch is required to load QM9 data. Install it via 'pip install torch'."
-        ) from e
-    try:
-        from rdkit.Chem import rdmolfiles
-    except ImportError as e:  # pragma: no cover - runtime check
-        raise ImportError(
-            "RDKit is required to load QM9 data. Install it, e.g., via 'conda install -c conda-forge rdkit'."
-        ) from e
+    _require_rdkit()
 
     sdf_path = os.path.join(data_dir, "gdb9.sdf")
     if not os.path.exists(sdf_path):
