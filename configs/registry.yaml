@@ -1,6 +1,11 @@
+## Experiment registry
+# The ``ai.scorer`` key selects how assembly indices are evaluated:
+#   - ``exact``: compute the true assembly index via the Monte-Carlo estimator.
+#   - ``surrogate``: use the fast heuristic surrogate model.  Control runs tweak
+#     the surrogate behaviour through the optional ``ai.mode`` field.
 experiments:
   exp01_baseline:
-    description: "Unguided baseline on QM9-CHON, matched sampler settings."
+    description: "Unguided surrogate baseline on QM9-CHON, matched sampler settings."
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: false, weight: 0.0, policy: additive}}
@@ -40,7 +45,7 @@ experiments:
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp05_permuted_ai_control:
-    description: "Guided run, λ=1.0, permuted AI control."
+    description: "Guided run, λ=1.0, permuted surrogate AI control."
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
@@ -50,7 +55,7 @@ experiments:
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
 
   exp06_null_ai_control:
-    description: "Guided run, λ=1.0, null AI control."
+    description: "Guided run, λ=1.0, null surrogate AI control."
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}

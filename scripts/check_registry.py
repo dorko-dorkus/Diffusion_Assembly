@@ -26,6 +26,10 @@ def main() -> None:
             errors.append(
                 f"{name}: description indicates exact AI but ai.scorer={scorer!r}"
             )
+        if re.search(r"\bsurrogate\b", desc, re.IGNORECASE) and scorer != "surrogate":
+            errors.append(
+                f"{name}: description indicates surrogate AI but ai.scorer={scorer!r}"
+            )
 
     if errors:
         for err in errors:
