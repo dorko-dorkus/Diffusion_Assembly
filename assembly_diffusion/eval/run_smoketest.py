@@ -25,6 +25,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import platform
+import random
+import subprocess
+
+import numpy as np
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem
@@ -52,6 +57,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run evaluation metrics smoke test")
     parser.add_argument("--print-metrics", action="store_true", help="Print metrics dictionary")
     args = parser.parse_args()
+
+    random.seed(0)
+    np.random.seed(0)
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:  # pragma: no cover - git may be unavailable
+        commit = "unknown"
+    logger.info(
+        "Reproducibility: seed=%s python=%s numpy=%s commit=%s",
+        0,
+        platform.python_version(),
+        np.__version__,
+        commit,
+    )
 
     if Chem is None:
         raise ImportError("RDKit is required for the smoke test; install rdkit==2024.9.6")
