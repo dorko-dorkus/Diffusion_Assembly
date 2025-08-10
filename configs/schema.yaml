@@ -14,8 +14,8 @@ model:
     weight: float # λ in [0, 5] sensible range
     policy: "additive|multiplicative"
 ai:
-  scorer: "exact|surrogate"
-  surrogate_ckpt: str | null
+  scorer: "exact|surrogate"  # 'exact' runs the Monte-Carlo estimator; 'surrogate' uses the heuristic model
+  surrogate_ckpt: str | null # required when scorer="surrogate"; must be null for scorer="exact"
   grammar: "default"
 sampler:
   n_samples: int
