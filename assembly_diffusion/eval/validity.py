@@ -28,6 +28,7 @@ import random
 import subprocess
 from pathlib import Path
 from importlib import metadata
+from typing import Iterable, Mapping, Sequence, Dict
 
 from ..graph import MoleculeGraph
 from ..logging_config import get_logger
@@ -117,3 +118,41 @@ def is_valid(graph: MoleculeGraph) -> bool:
     """Return ``True`` if ``graph`` can be sanitized by RDKit."""
 
     return sanitize_or_none(graph) is not None
+
+
+def validity_rate(graphs: Iterable[MoleculeGraph]) -> float:
+    """Return the fraction of RDKit-valid graphs in ``graphs``.
+
+    Parameters
+    ----------
+    graphs:
+        Any iterable of :class:`~assembly_diffusion.graph.MoleculeGraph`.
+
+    Returns
+    -------
+    float
+        The proportion of graphs that can be sanitised by RDKit. ``0.0`` is
+        returned for an empty iterable.
+    """
+
+    total = 0
+    valid = 0
+    for g in graphs:
+        total += 1
+        if is_valid(g):
+            valid += 1
+    return valid / total if total else 0.0
+
+
+def compare_validity_runs(
+    runs: Mapping[str, Sequence[MoleculeGraph]]
+) -> Dict[str, float]:
+    """Return validity rates for each named run.
+
+    ``runs`` maps run names to sequences of graphs, with the entry labelled
+    ``"baseline"`` typically representing the control condition. The function
+    computes :func:`validity_rate` for every run to enable baseline
+    comparisons or ablation studies.
+    """
+
+    return {name: validity_rate(graphs) for name, graphs in runs.items()}
