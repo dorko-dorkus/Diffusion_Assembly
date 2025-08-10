@@ -12,15 +12,19 @@ params: fingerprint radius=2 and ``nBits``=2048; evaluate ``sample_set`` against
     ``reference_smiles``.
 repro: deterministic RDKit operations ensure reproducible metrics for fixed
     inputs.
-validation: ``tests/test_metrics_rdkit_required.py`` checks dependency handling
-    and expected metric keys.
+validation: generated molecules can be split into train/validation/test sets or
+    used in ``k``-fold cross-validation for model selection. Early stopping
+    should monitor a validation metric such as ``qed_mean`` with a patience of
+    ``n`` epochs. ``tests/test_metrics_rdkit_required.py`` checks dependency
+    handling and expected metric keys.
 """
 
 from __future__ import annotations
 
 SCHEMA_VERSION = "1.1.0"
 
-from typing import Iterable, Sequence, Set, List, Any, Tuple
+import random
+from typing import Iterable, Sequence, Set, List, Any, Tuple, Optional
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem, DataStructs
@@ -83,6 +87,63 @@ def _mean_pairwise_tanimoto_distance(fps: List[Any]) -> float:
             acc += 1.0 - sim
             k += 1
     return acc / k if k else 0.0
+
+
+def train_val_test_split(
+    graphs: Sequence[MoleculeGraph],
+    train_ratio: float = 0.8,
+    val_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    seed: Optional[int] = None,
+) -> Tuple[List[MoleculeGraph], List[MoleculeGraph], List[MoleculeGraph]]:
+    """Return shuffled ``graphs`` split into train, validation and test sets.
+
+    The ratios must sum to 1.0. ``seed`` controls the RNG used for shuffling.
+    This helper enables a simple validation protocol when evaluating models.
+    """
+
+    total = train_ratio + val_ratio + test_ratio
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError("train_ratio + val_ratio + test_ratio must sum to 1.0")
+
+    items = list(graphs)
+    rng = random.Random(seed)
+    rng.shuffle(items)
+
+    n = len(items)
+    n_train = int(n * train_ratio)
+    n_val = int(n * val_ratio)
+
+    train = items[:n_train]
+    val = items[n_train : n_train + n_val]
+    test = items[n_train + n_val :]
+    return train, val, test
+
+
+class EarlyStopping:
+    """Track validation scores and implement early stopping.
+
+    ``patience`` specifies the number of epochs without improvement allowed
+    before signalling that training should stop. ``mode`` determines whether a
+    higher (``"max"``) or lower (``"min"``) score is better.
+    """
+
+    def __init__(self, patience: int = 10, mode: str = "max") -> None:
+        self.patience = patience
+        self.mode = mode
+        self.best = float("-inf") if mode == "max" else float("inf")
+        self.counter = 0
+
+    def step(self, metric: float) -> bool:
+        """Update with a new ``metric``. Return ``True`` to stop training."""
+
+        improved = metric > self.best if self.mode == "max" else metric < self.best
+        if improved:
+            self.best = metric
+            self.counter = 0
+        else:
+            self.counter += 1
+        return self.counter >= self.patience
 
 
 class Metrics:
