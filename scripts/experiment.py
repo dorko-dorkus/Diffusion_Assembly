@@ -1,3 +1,17 @@
+"""Experiment runner for the assembly diffusion pipeline.
+
+baseline: the default configuration and its reference metrics act as
+    the baseline for subsequent comparisons.
+data_sources: experiment settings and model paths are loaded from
+    ``configs/registry.yaml`` along with generated artifacts.
+metrics: pipeline evaluation statistics are written via
+    ``metrics_writer`` such as validity and AI score summaries.
+objective: execute a single experiment and persist a manifest with
+    environment details for downstream analysis.
+validation: smoke tests like ``tests/test_pipeline_smoke.py`` ensure the
+    script runs end to end and produces metrics.
+"""
+
 import hashlib, json, os, subprocess, sys, time, yaml, logging
 from datetime import datetime
 from pathlib import Path
