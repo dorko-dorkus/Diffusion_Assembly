@@ -7,7 +7,18 @@ method: load a calibrator CSV, fit a trimmed log–linear model of frequency
     degeneracy against frequency.
 metrics: slope ``m``, intercept ``c``, coefficient of determination ``R²``,
     bootstrap confidence interval for ``m`` and Spearman ``ρ``/``p`` for
-    degeneracy.
+    degeneracy.  ``m`` and ``c`` are obtained from the least–squares fit of
+    ``y = \log(f)`` to ``y = mA + c`` where
+    ``m, c = \arg\min_{m,c} \sum_i (y_i - (m A_i + c))^2``.
+    The coefficient of determination is
+    ``R² = 1 - SS_res/SS_tot`` with
+    ``SS_res = \sum_i (y_i - \hat y_i)^2`` and
+    ``SS_tot = \sum_i (y_i - \bar y)^2``.
+    Spearman rank correlation is computed as
+    ``ρ = 1 - (6\sum_i d_i^2)/(n(n^2-1))`` with ``p`` from a ``t``-approximation.
+reporting: metrics are averaged over random seeds and summarized as
+    ``mean ± std``; for ``m`` the bootstrap distribution additionally provides
+    a ``(1-α)`` confidence interval.
 objective: quantify how calibration frequency scales with assembly size and how
     degeneracy relates to frequency.
 repro: ``python scripts/analyze_calibrators.py path/to/calibs.csv --alpha 0.05
