@@ -13,6 +13,12 @@ objective: exercise the metrics stack to ensure all components integrate.
 repro: deterministic because inputs are hard coded and all randomness fixed.
 validation: script runs without error and optional ``--print-metrics`` output
     can be inspected in continuous integration.
+split: each of the three molecules is treated as a separate train, validation,
+    and test example to illustrate a complete evaluation protocol.
+selection: in real experiments the model with the highest validation F1 would
+    be chosen.
+early_stopping: training would halt when the validation F1 fails to improve for
+    two consecutive checks; this smoke test runs a single deterministic pass.
 """
 
 from __future__ import annotations
@@ -51,20 +57,29 @@ def main() -> None:
         raise ImportError("RDKit is required for the smoke test; install rdkit==2024.9.6")
 
     sample_smiles = ["CCO", "CCN", "CCC"]
-    graphs = [MoleculeGraph.from_rdkit(Chem.MolFromSmiles(s)) for s in sample_smiles]
+    train_smiles, val_smiles, test_smiles = sample_smiles
 
-    metrics = Metrics.evaluate(graphs, reference_smiles=sample_smiles)
+    def evaluate(smiles: str) -> dict[str, float]:
+        graph = MoleculeGraph.from_rdkit(Chem.MolFromSmiles(smiles))
+        result = Metrics.evaluate([graph], reference_smiles=[smiles])
+        if AISurrogate is not None:
+            surrogate = AISurrogate()
+            s_score = surrogate.score(graph)
+            result.update(
+                {f"surrogate_{k}": v for k, v in summarise_A_hat([s_score]).items()}
+            )
+        if AssemblyIndex is not None:
+            e_score = AssemblyIndex.A_star_exact_or_none(graph)
+            result.update(
+                {f"exact_{k}": v for k, v in summarise_A_hat([e_score]).items()}
+            )
+        return result
 
-    if AISurrogate is not None:
-        surrogate = AISurrogate()
-        s_scores = [surrogate.score(g) for g in graphs]
-        metrics.update(
-            {f"surrogate_{k}": v for k, v in summarise_A_hat(s_scores).items()}
-        )
-
-    if AssemblyIndex is not None:
-        e_scores = [AssemblyIndex.A_star_exact_or_none(g) for g in graphs]
-        metrics.update({f"exact_{k}": v for k, v in summarise_A_hat(e_scores).items()})
+    metrics = {
+        "train": evaluate(train_smiles),
+        "val": evaluate(val_smiles),
+        "test": evaluate(test_smiles),
+    }
 
     if args.print_metrics:
         logger.info(metrics)
