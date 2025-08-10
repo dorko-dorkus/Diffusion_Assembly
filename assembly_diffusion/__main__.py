@@ -13,8 +13,10 @@ objective: demonstrate launching and evaluating a configured experiment.
 params: experiment parameters come from ``configs/registry.yaml`` and any CLI
     overrides.
 repro: deterministic seeds and committed configs ensure reproducibility.
-validation: ``scripts/check_registry.py`` and unit tests verify experiment
-    setup.
+validation: experiments rely on an 80/10/10 train/validation/test split with
+    the best checkpoint chosen by validation F1.  Training may stop early when
+    that score fails to improve for a set patience.  ``scripts/check_registry.py``
+    and unit tests verify experiment setup.
 """
 
 from .cli import main
