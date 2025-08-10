@@ -30,7 +30,7 @@ def _git_hash():
             .decode()
             .strip()
         )
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         return "unknown"
 
 
@@ -41,7 +41,7 @@ def _pip_freeze():
             .decode()
             .splitlines()
         )
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         return []
 
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     try:
         import torch
-    except Exception:
+    except ImportError:
         torch = None
 
     from assembly_diffusion.eval.metrics_writer import write_metrics
