@@ -1,3 +1,24 @@
+"""Experiment specification for statistical analysis helpers.
+
+baseline: expected results from simple arrays and SciPy/statsmodels serve as
+    reference behavior.
+data_sources: synthetic lists and pandas ``DataFrame`` objects defined within
+    the tests.
+method: invoke functions from :mod:`analysis` to compute statistical
+    comparisons and diversity metrics.
+metrics: Kolmogorov–Smirnov p-values, scaffold counts, regression
+    parameters, bootstrap medians, sensitivity medians, error quantiles and
+    calibration curves.
+objective: verify the analysis utilities produce correct and stable
+    statistics across a range of scenarios.
+params: tests exercise options such as bootstrap iterations, quantiles and
+    lambda values.
+repro: deterministic NumPy operations and fixed random seeds yield
+    reproducible outputs.
+validation: running ``pytest tests/test_analysis.py`` executes the
+    assertions below.
+"""
+
 import numpy as np
 import pandas as pd
 import pytest
