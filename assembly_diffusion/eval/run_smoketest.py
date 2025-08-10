@@ -1,3 +1,17 @@
+"""Experiment specification for the evaluation metrics smoke test.
+
+baseline: compute metrics on a tiny set of molecules without modifications.
+data_sources: inline SMILES strings ``["CCO", "CCN", "CCC"]`` parsed by RDKit.
+method: convert SMILES to :class:`~assembly_diffusion.graph.MoleculeGraph`
+    instances and evaluate using :class:`~assembly_diffusion.eval.metrics.Metrics`.
+metrics: validity and assembly index summaries plus optional surrogate and
+    exact assembly index statistics.
+objective: exercise the metrics stack to ensure all components integrate.
+repro: deterministic because inputs are hard coded and all randomness fixed.
+validation: script runs without error and optional ``--print-metrics`` output
+    can be inspected in continuous integration.
+"""
+
 from __future__ import annotations
 
 import argparse
