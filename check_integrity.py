@@ -4,6 +4,7 @@ import sys
 import glob
 from pathlib import Path
 import logging
+import pickle
 
 import torch
 
@@ -30,16 +31,23 @@ def main() -> None:
             .decode("utf-8")
             .strip()
         )
-    except Exception as exc:
-        logger.error("Unable to determine git commit: %s", exc)
+    except subprocess.CalledProcessError as exc:
+        logger.error("git command failed while determining commit: %s", exc)
+        raise SystemExit(1)
+    except FileNotFoundError as exc:
+        logger.error("git executable not found: %s", exc)
         raise SystemExit(1)
 
     ok = True
     for path in glob.glob(os.path.join("checkpoints", "*.pt")):
         try:
             data = torch.load(path, map_location="cpu")
-        except Exception as exc:  # pragma: no cover - best effort load
-            logger.error("Failed to load %s: %s", path, exc)
+        except OSError as exc:  # pragma: no cover - best effort load
+            logger.error("I/O error while loading %s: %s", path, exc)
+            ok = False
+            continue
+        except (pickle.UnpicklingError, RuntimeError) as exc:  # pragma: no cover - best effort load
+            logger.error("Invalid checkpoint format for %s: %s", path, exc)
             ok = False
             continue
         commit = data.get("commit")
