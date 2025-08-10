@@ -1,4 +1,18 @@
-"""Helper utilities for serialising experiment metrics."""
+"""Experiment specification for serialising experiment metrics.
+
+data_sources: metric dictionaries produced by experiment runs and model
+    evaluations.
+method: normalise numeric values, add a ``schema_version`` field and dump a
+    ``metrics.json`` file in the output directory.
+objective: persist metrics in a consistent JSON format for downstream analysis
+    and comparison.
+params: ``outdir`` destination directory and ``**metrics`` arbitrary name/value
+    pairs where numbers are cast to ``float`` or ``int``.
+repro: serialisation is deterministic; identical inputs yield identical
+    ``metrics.json`` files.
+validation: tests or downstream consumers can load ``metrics.json`` and check
+    for expected keys and numeric types.
+"""
 
 from __future__ import annotations
 
