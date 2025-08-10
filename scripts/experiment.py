@@ -91,6 +91,8 @@ if __name__ == "__main__":
     np.random.seed(cfg["seed"])
     if torch is not None:
         torch.manual_seed(cfg["seed"])
+        if hasattr(torch, "use_deterministic_algorithms"):
+            torch.use_deterministic_algorithms(True)
 
     # run the pipeline and always write metrics.json
     metrics, flags = run_pipeline(cfg, outdir)
