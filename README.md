@@ -34,10 +34,10 @@ To get started locally:
 ### RDKit
 
 RDKit is an optional dependency used for molecule manipulation and loading the QM9 dataset.  The project is tested against
-`rdkit` version `2024.09.6`. It is often easier to install via conda:
+`rdkit` version `2024.9.6`. It is often easier to install via conda:
 
 ```bash
-conda install -c conda-forge rdkit=2024.09.6
+conda install -c conda-forge rdkit=2024.9.6
 ```
 
 Without RDKit, features such as canonical SMILES generation and QM9 dataset loading will be unavailable and will raise informative errors.

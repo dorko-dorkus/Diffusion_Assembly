@@ -12,6 +12,9 @@ try:  # pragma: no cover - RDKit optional
     from ..qed_sa import qed_sa_distribution
 except ImportError:  # pragma: no cover - handled at runtime
     Chem = None
+    DataStructs = None
+    AllChem = None
+    qed_sa_distribution = None
 
 from ..graph import MoleculeGraph
 from .validity import sanitize_or_none
@@ -35,6 +38,9 @@ def smiles_set(graphs: Iterable[MoleculeGraph]) -> Set[str]:
 def _ecfp4_fingerprints(valid_smiles: List[str]) -> List[Any]:
     """Return RDKit ECFP4 fingerprints for ``valid_smiles``."""
 
+    if Chem is None or AllChem is None:
+        raise RuntimeError("RDKit required for ECFP4 fingerprints")
+
     fps: List[Any] = []
     for s in valid_smiles:
         mol = Chem.MolFromSmiles(s)
@@ -46,6 +52,9 @@ def _ecfp4_fingerprints(valid_smiles: List[str]) -> List[Any]:
 
 def _mean_pairwise_tanimoto_distance(fps: List[Any]) -> float:
     """Return the mean pairwise ``1 - Tanimoto`` distance for fingerprints."""
+
+    if DataStructs is None:
+        raise RuntimeError("RDKit required for Tanimoto similarity")
 
     if len(fps) < 2:
         return 0.0

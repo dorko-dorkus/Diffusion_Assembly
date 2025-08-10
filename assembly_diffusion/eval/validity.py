@@ -26,7 +26,7 @@ def sanitize_or_none(graph: MoleculeGraph):
 
     try:
         return graph.to_rdkit()
-    except (ValueError, RuntimeError, MolSanitizeException):
+    except (ValueError, RuntimeError, ImportError, MolSanitizeException):
         return None
 
 

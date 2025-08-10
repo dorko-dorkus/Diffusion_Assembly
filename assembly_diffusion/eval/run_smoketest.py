@@ -31,7 +31,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if Chem is None:
-        raise ImportError("RDKit is required for the smoke test")
+        raise ImportError("RDKit is required for the smoke test; install rdkit==2024.9.6")
 
     sample_smiles = ["CCO", "CCN", "CCC"]
     graphs = [MoleculeGraph.from_rdkit(Chem.MolFromSmiles(s)) for s in sample_smiles]
