@@ -3,7 +3,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# TODO: load features + labels, define model, train, k-fold, save metrics
+# TODO(#1, @model-team, 2024-10-01): load features + labels, define model, train, k-fold, save metrics
 outdir = f"results/surrogate_train_{int(time.time())}"
 Path(outdir).mkdir(parents=True, exist_ok=True)
 metrics = {"mae": 0.0, "rmse": 0.0, "folds": []}  # fill real values
