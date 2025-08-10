@@ -13,7 +13,9 @@ params: function arguments expose sample counts, regression formulas,
 repro: deterministic NumPy operations and optional fixed seeds yield
     reproducible statistics.
 validation: ``tests/test_analysis.py`` covers representative functions and
-    edge cases.
+    edge cases. ``train_val_test_split`` helps allocate data for model
+    selection, and ``early_stopping`` triggers when validation performance
+    stagnates.
 
 The functions are lightweight so that they can also be executed in continuous
 integration environments.
@@ -186,6 +188,61 @@ def error_quantiles(
     return {float(q): float(v) for q, v in zip(quantiles, qs)}
 
 
+def train_val_test_split(
+    data: Sequence,
+    train_size: float = 0.8,
+    val_size: float = 0.1,
+    test_size: float = 0.1,
+    random_state: int | None = None,
+):
+    """Split ``data`` into train, validation and test subsets.
+
+    The function shuffles indices using ``random_state`` and returns three
+    NumPy arrays with the respective portions of the data.  Sizes are
+    interpreted as fractions and must sum to one.  Validation sets are intended
+    for model selection while test sets are held out for final evaluation.
+
+    Notes
+    -----
+    Early stopping criteria can be implemented by monitoring a metric on the
+    validation split and stopping training when it fails to improve for a
+    number of iterations.  ``early_stopping`` below implements a simple
+    patience-based rule.
+    """
+
+    total = train_size + val_size + test_size
+    if not np.isclose(total, 1.0):
+        raise ValueError("train_size + val_size + test_size must equal 1")
+    arr = np.asarray(data)
+    n = arr.shape[0]
+    rng = np.random.default_rng(random_state)
+    indices = rng.permutation(n)
+    n_train = int(round(train_size * n))
+    n_val = int(round(val_size * n))
+    train_idx = indices[:n_train]
+    val_idx = indices[n_train : n_train + n_val]
+    test_idx = indices[n_train + n_val :]
+    return arr[train_idx], arr[val_idx], arr[test_idx]
+
+
+def early_stopping(metric_history: Sequence[float], patience: int = 5) -> bool:
+    """Return ``True`` if no metric improvement was seen for ``patience`` steps.
+
+    Parameters
+    ----------
+    metric_history:
+        Sequence of validation metric values observed over training iterations.
+    patience:
+        How many iterations to wait for an improvement before signalling early
+        stopping.
+    """
+
+    if len(metric_history) <= patience:
+        return False
+    best_idx = int(np.argmax(metric_history))
+    return len(metric_history) - best_idx - 1 >= patience
+
+
 __all__ = [
     "ks_test",
     "scaffold_diversity",
@@ -194,4 +251,6 @@ __all__ = [
     "sensitivity_over_lambda",
     "calibration_curve",
     "error_quantiles",
+    "train_val_test_split",
+    "early_stopping",
 ]
