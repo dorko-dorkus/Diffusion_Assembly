@@ -8,7 +8,8 @@ from typing import Iterable, Sequence, Set, List, Any, Tuple
 
 try:  # pragma: no cover - RDKit optional
     from rdkit import Chem, DataStructs
-    from rdkit.Chem import AllChem, QED, rdMolDescriptors
+    from rdkit.Chem import AllChem
+    from ..qed_sa import qed_sa_distribution
 except ImportError:  # pragma: no cover - handled at runtime
     Chem = None
 
@@ -59,33 +60,6 @@ def _mean_pairwise_tanimoto_distance(fps: List[Any]) -> float:
     return acc / k if k else 0.0
 
 
-def _qed_sa(smiles: List[str]) -> Tuple[float, float]:
-    if not smiles:
-        return 0.0, 0.0
-    qeds: List[float] = []
-    sas: List[float] = []
-    for s in smiles:
-        mol = Chem.MolFromSmiles(s)
-        if not mol:
-            continue
-        try:
-            qeds.append(float(QED.qed(mol)))
-        except (ValueError, RuntimeError):
-            pass
-        try:
-            sa = (
-                rdMolDescriptors.CalcNumRotatableBonds(mol)
-                + rdMolDescriptors.CalcNumBridgeheadAtoms(mol)
-                + rdMolDescriptors.CalcNumSpiroAtoms(mol)
-            )
-            sas.append(float(sa))
-        except (ValueError, RuntimeError):
-            pass
-    qed = sum(qeds) / len(qeds) if qeds else 0.0
-    sa = sum(sas) / len(sas) if sas else 0.0
-    return qed, sa
-
-
 class Metrics:
     """Basic metrics for evaluating generated molecules."""
 
@@ -100,8 +74,8 @@ class Metrics:
         ``diversity`` (legacy alias for ``diversity_ecfp4_mean_distance``),
         ``diversity_ecfp4_mean_distance`` (mean pairwise 1 - Tanimoto distance
         over ECFP4 fingerprints), ``novelty`` against the provided
-        ``reference_smiles``, and averages for ``qed`` and a simple synthetic
-        accessibility proxy ``sa``.
+        ``reference_smiles``, and distribution summaries for RDKit ``qed``
+        and synthetic accessibility ``sa`` scores.
         """
 
         if Chem is None:
@@ -114,8 +88,10 @@ class Metrics:
                 "diversity": 0.0,
                 "diversity_ecfp4_mean_distance": 0.0,
                 "novelty": 0.0,
-                "qed": 0.0,
-                "sa": 0.0,
+                "qed_mean": 0.0,
+                "qed_median": 0.0,
+                "sa_mean": 0.0,
+                "sa_median": 0.0,
             }
 
         # Determine number of valid molecules
@@ -132,15 +108,17 @@ class Metrics:
         novel = [s for s in unique_smiles if s not in ref_set]
         novelty = len(novel) / len(unique_smiles) if unique_smiles else 0.0
 
-        qed, sa = _qed_sa(list(unique_smiles))
+        qed_mean, qed_median, sa_mean, sa_median = qed_sa_distribution(list(unique_smiles))
         return {
             "validity": validity,
             "uniqueness": uniqueness,
             "diversity": diversity_ecfp4,
             "diversity_ecfp4_mean_distance": diversity_ecfp4,
             "novelty": novelty,
-            "qed": qed,
-            "sa": sa,
+            "qed_mean": qed_mean,
+            "qed_median": qed_median,
+            "sa_mean": sa_mean,
+            "sa_median": sa_median,
         }
 
 

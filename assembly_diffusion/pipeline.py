@@ -13,8 +13,9 @@ from .logging_config import get_logger
 # Try RDKit early to fail fast when metrics require it
 try:
     from rdkit import Chem, DataStructs
-    from rdkit.Chem import AllChem, QED, rdMolDescriptors
+    from rdkit.Chem import AllChem
     from rdkit.Chem.rdchem import MolSanitizeException
+    from .qed_sa import qed_sa_distribution
 
     _HAVE_RDKIT = True
 except ImportError:
@@ -152,35 +153,6 @@ def _novelty(
     nov = [s for s in valid_canonical if s and s not in ref_set]
     denom = len([s for s in valid_canonical if s])
     return float(len(nov)) / float(denom) if denom > 0 else 0.0
-
-
-def _qed_sa(valid_smiles: List[str]) -> Tuple[float, float]:
-    """Average QED and a simple SA proxy for ``valid_smiles``."""
-    if not valid_smiles:
-        return 0.0, 0.0
-    qed_scores: List[float] = []
-    sa_scores: List[float] = []
-    for s in valid_smiles:
-        mol = Chem.MolFromSmiles(s)
-        if not mol:
-            continue
-        try:
-            qed_scores.append(float(QED.qed(mol)))
-        except (ValueError, RuntimeError):
-            pass
-        try:
-            sa = (
-                rdMolDescriptors.CalcNumRotatableBonds(mol)
-                + rdMolDescriptors.CalcNumBridgeheadAtoms(mol)
-                + rdMolDescriptors.CalcNumSpiroAtoms(mol)
-            )
-            sa_scores.append(float(sa))
-        except (ValueError, RuntimeError):
-            pass
-    qed = sum(qed_scores) / len(qed_scores) if qed_scores else 0.0
-    sa = sum(sa_scores) / len(sa_scores) if sa_scores else 0.0
-    return qed, sa
-
 
 def _median(values: List[float]) -> float:
     if not values:
@@ -375,8 +347,10 @@ def run_pipeline(
         "uniqueness": False,
         "diversity": False,
         "novelty": False,
-        "qed": False,
-        "sa": False,
+        "qed_mean": False,
+        "qed_median": False,
+        "sa_mean": False,
+        "sa_median": False,
     }
 
     if cfg.get("metrics", {}).get("rdkit", True) and _HAVE_RDKIT:
@@ -401,7 +375,7 @@ def run_pipeline(
             limit=int(cfg["dataset"].get("limit", 0) or 0),
         )
 
-        qed, sa = _qed_sa(valid_smiles)
+        qed_mean, qed_median, sa_mean, sa_median = qed_sa_distribution(valid_smiles)
     elif not _HAVE_RDKIT and cfg.get("metrics", {}).get("rdkit", True):
         canonical, valid_mask = smiles, [False] * len(smiles)
         valid_fraction = (
@@ -410,8 +384,10 @@ def run_pipeline(
         uniqueness = 0.0
         diversity = 0.0
         novelty = 0.0
-        qed = 0.0
-        sa = 0.0
+        qed_mean = 0.0
+        qed_median = 0.0
+        sa_mean = 0.0
+        sa_median = 0.0
         for k in flags:
             flags[k] = True
     else:
@@ -420,8 +396,10 @@ def run_pipeline(
         uniqueness = 0.0
         diversity = 0.0
         novelty = 0.0
-        qed = 0.0
-        sa = 0.0
+        qed_mean = 0.0
+        qed_median = 0.0
+        sa_mean = 0.0
+        sa_median = 0.0
 
     # 4) Assembly index scoring and median
     median_ai = 0.0
@@ -479,10 +457,14 @@ def run_pipeline(
         "diversity_ci": _ci_placeholder(diversity),
         "novelty": float(novelty),
         "novelty_ci": _ci_placeholder(novelty),
-        "qed": float(qed),
-        "qed_ci": _ci_placeholder(qed),
-        "sa": float(sa),
-        "sa_ci": _ci_placeholder(sa),
+        "qed_mean": float(qed_mean),
+        "qed_mean_ci": _ci_placeholder(qed_mean),
+        "qed_median": float(qed_median),
+        "qed_median_ci": _ci_placeholder(qed_median),
+        "sa_mean": float(sa_mean),
+        "sa_mean_ci": _ci_placeholder(sa_mean),
+        "sa_median": float(sa_median),
+        "sa_median_ci": _ci_placeholder(sa_median),
         "median_ai": float(median_ai),
         "median_ai_ci": _ci_placeholder(median_ai),
     }
