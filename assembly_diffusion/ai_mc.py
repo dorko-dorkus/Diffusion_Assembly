@@ -40,9 +40,17 @@ def _brics_cuts(mol: "Chem.Mol") -> List[Tuple[int, int]]:
         bonds.append((b.GetBeginAtomIdx(), b.GetEndAtomIdx()))
     # If RDKit BRICS is available, prefer its decomposition points
     if BRICS is not None:
-        # BRICSDecompose returns SMILES, but BRICS bonds correspond to env tags;
-        # in practice we just allow all acyclic bonds as cuttable as a near-BRICS proxy
-        pass
+        try:
+            brics: List[Tuple[int, int]] = []
+            for (i, j), _ in BRICS.FindBRICSBonds(mol):
+                bond = mol.GetBondBetweenAtoms(i, j)
+                if bond is None or bond.IsInRing():
+                    continue
+                brics.append((i, j))
+            if brics:
+                bonds = brics
+        except Exception:  # pragma: no cover - defensive against RDKit issues
+            pass
     return bonds
 
 
