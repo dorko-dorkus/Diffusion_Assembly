@@ -1,4 +1,20 @@
-"""Evaluation metrics for sets of molecular graphs."""
+"""Experiment specification for RDKit-based evaluation metrics.
+
+baseline: RDKit validity, uniqueness, diversity and novelty metrics provide the
+    baseline quality assessment.
+data_sources: generated molecule sets and reference SMILES such as the QM9-CHON
+    training split.
+method: canonicalise molecules, compute ECFP4 fingerprints and Tanimoto
+    distances, and summarise QED and SA scores with RDKit.
+objective: quantify quality and diversity of generated molecules for comparison
+    to baselines.
+params: fingerprint radius=2 and ``nBits``=2048; evaluate ``sample_set`` against
+    ``reference_smiles``.
+repro: deterministic RDKit operations ensure reproducible metrics for fixed
+    inputs.
+validation: ``tests/test_metrics_rdkit_required.py`` checks dependency handling
+    and expected metric keys.
+"""
 
 from __future__ import annotations
 
