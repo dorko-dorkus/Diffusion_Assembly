@@ -20,6 +20,9 @@ except ImportError:  # pragma: no cover - handled at runtime
     SanitizeMol = None
     MolSanitizeException = RuntimeError
 
+# Flag used throughout the module to gate RDKit‑specific functionality.
+_HAVE_RDKIT = Chem is not None and SanitizeMol is not None
+
 
 # Basic valence caps used for fast feasibility checks.  These constants are
 # intentionally kept minimal and mirror those used in :mod:`mask` to avoid a
@@ -133,7 +136,7 @@ class MoleculeGraph:
     def from_rdkit(mol: "Chem.Mol") -> "MoleculeGraph":
         """Construct a :class:`MoleculeGraph` from an RDKit molecule."""
 
-        if Chem is None:
+        if not _HAVE_RDKIT:
             raise ImportError(
                 "RDKit is required for converting an RDKit Mol to MoleculeGraph"
             )
@@ -169,7 +172,7 @@ class MoleculeGraph:
             If RDKit is not installed.
         """
 
-        if Chem is None:
+        if not _HAVE_RDKIT:
             raise ImportError(
                 "RDKit is required for converting MoleculeGraph to an RDKit Mol"
             )
@@ -196,7 +199,7 @@ class MoleculeGraph:
         The method returns ``False`` when RDKit is not available.
         """
 
-        if Chem is None:
+        if not _HAVE_RDKIT:
             return False
         try:
             self.to_rdkit()
@@ -225,6 +228,6 @@ class MoleculeGraph:
             If RDKit is not installed.
         """
 
-        if Chem is None:
+        if not _HAVE_RDKIT:
             raise ImportError("RDKit is required to generate canonical SMILES")
         return Chem.MolToSmiles(self.to_rdkit(), canonical=True)
