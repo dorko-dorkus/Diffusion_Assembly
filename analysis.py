@@ -25,12 +25,46 @@ from __future__ import annotations
 
 from typing import Iterable, Dict, Sequence
 
+import logging
+import platform
+import random
+import subprocess
+
 import numpy as np
 import pandas as pd
+import scipy
+import statsmodels
 from scipy.stats import ks_2samp
 from statsmodels.genmod.generalized_estimating_equations import GEE
 from statsmodels.genmod.families import Binomial
 from statsmodels.genmod.cov_struct import Exchangeable
+
+logger = logging.getLogger(__name__)
+
+
+def _log_environment(seed: int = 0) -> None:
+    """Seed RNGs and log version information for reproducibility."""
+
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:  # pragma: no cover - git may be unavailable
+        commit = "unknown"
+    logger.info(
+        "Reproducibility: seed=%s python=%s numpy=%s pandas=%s scipy=%s statsmodels=%s commit=%s",
+        seed,
+        platform.python_version(),
+        np.__version__,
+        pd.__version__,
+        scipy.__version__,
+        statsmodels.__version__,
+        commit,
+    )
+
+
+_log_environment()
+
 
 try:  # RDKit is optional and may not be installed in every environment.
     from rdkit import Chem
