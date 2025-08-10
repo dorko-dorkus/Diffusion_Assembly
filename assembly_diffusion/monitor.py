@@ -274,8 +274,12 @@ class RunMonitor:
             pass
         try:
             logger.error(err)
-        except Exception:  # pragma: no cover - logging failure is non-critical
-            pass
+        except (OSError, RuntimeError):  # pragma: no cover - logging failure is non-critical
+            try:
+                sys.stderr.write(err + "\n")
+            except OSError:
+                # If writing to stderr fails, there's nothing further we can do.
+                pass
         self._error_logged = True
 
     def _roll_existing_jsonl(self, today: str) -> None:
