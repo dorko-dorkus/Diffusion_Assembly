@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 from typing import Iterable, Sequence, Set, List, Any, Tuple
 
@@ -31,7 +31,9 @@ def smiles_set(graphs: Iterable[MoleculeGraph]) -> Set[str]:
     return result
 
 
-def _fingerprints(valid_smiles: List[str]) -> List[Any]:
+def _ecfp4_fingerprints(valid_smiles: List[str]) -> List[Any]:
+    """Return RDKit ECFP4 fingerprints for ``valid_smiles``."""
+
     fps: List[Any] = []
     for s in valid_smiles:
         mol = Chem.MolFromSmiles(s)
@@ -41,7 +43,9 @@ def _fingerprints(valid_smiles: List[str]) -> List[Any]:
     return fps
 
 
-def _internal_diversity(fps: List[Any]) -> float:
+def _mean_pairwise_tanimoto_distance(fps: List[Any]) -> float:
+    """Return the mean pairwise ``1 - Tanimoto`` distance for fingerprints."""
+
     if len(fps) < 2:
         return 0.0
     n = len(fps)
@@ -93,7 +97,9 @@ class Metrics:
         """Return RDKit-based metrics for ``sample_set``.
 
         The returned dictionary contains ``validity``, ``uniqueness``,
-        ``diversity`` (internal Tanimoto), ``novelty`` against the provided
+        ``diversity`` (legacy alias for ``diversity_ecfp4_mean_distance``),
+        ``diversity_ecfp4_mean_distance`` (mean pairwise 1 - Tanimoto distance
+        over ECFP4 fingerprints), ``novelty`` against the provided
         ``reference_smiles``, and averages for ``qed`` and a simple synthetic
         accessibility proxy ``sa``.
         """
@@ -106,6 +112,7 @@ class Metrics:
                 "validity": 0.0,
                 "uniqueness": 0.0,
                 "diversity": 0.0,
+                "diversity_ecfp4_mean_distance": 0.0,
                 "novelty": 0.0,
                 "qed": 0.0,
                 "sa": 0.0,
@@ -118,8 +125,8 @@ class Metrics:
         unique_smiles = smiles_set(sample_set)
         uniqueness = len(unique_smiles) / num_valid if num_valid else 0.0
 
-        fps = _fingerprints(list(unique_smiles))
-        diversity = _internal_diversity(fps) if fps else 0.0
+        fps = _ecfp4_fingerprints(list(unique_smiles))
+        diversity_ecfp4 = _mean_pairwise_tanimoto_distance(fps) if fps else 0.0
 
         ref_set = set(reference_smiles)
         novel = [s for s in unique_smiles if s not in ref_set]
@@ -129,7 +136,8 @@ class Metrics:
         return {
             "validity": validity,
             "uniqueness": uniqueness,
-            "diversity": diversity,
+            "diversity": diversity_ecfp4,
+            "diversity_ecfp4_mean_distance": diversity_ecfp4,
             "novelty": novelty,
             "qed": qed,
             "sa": sa,
