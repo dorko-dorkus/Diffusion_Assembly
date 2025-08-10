@@ -23,7 +23,7 @@ def smiles_set(graphs: Iterable[MoleculeGraph]) -> Set[str]:
     """Return a set of canonical SMILES for valid graphs."""
 
     if Chem is None:
-        raise ImportError("RDKit is required to generate SMILES")
+        raise RuntimeError("RDKit required for metric smiles_set")
     result: Set[str] = set()
     for g in graphs:
         mol = sanitize_or_none(g)
@@ -79,7 +79,7 @@ class Metrics:
         """
 
         if Chem is None:
-            raise ImportError("RDKit is required to evaluate metrics")
+            raise RuntimeError("RDKit required for metric evaluate")
         total = len(sample_set)
         if total == 0:
             return {

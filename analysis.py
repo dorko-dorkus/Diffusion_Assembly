@@ -41,7 +41,7 @@ def scaffold_diversity(smiles: Iterable[str]) -> int:
     """
 
     if Chem is None:
-        raise ImportError("RDKit is required for scaffold diversity computation")
+        raise RuntimeError("RDKit required for metric scaffold_diversity")
 
     scaffolds = set()
     for smi in smiles:
