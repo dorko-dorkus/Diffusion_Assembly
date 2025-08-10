@@ -14,7 +14,7 @@ experiments:
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 1.0, policy: additive}}
-    ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
+    ai: {scorer: exact, surrogate_ckpt: null, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
     metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
@@ -24,7 +24,7 @@ experiments:
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 0.5, policy: additive}}
-    ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
+    ai: {scorer: exact, surrogate_ckpt: null, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
     metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
@@ -34,7 +34,7 @@ experiments:
     dataset: {name: qm9_chon, split: test, limit: 0}
     seed: 42
     model: {ckpt: null, steps: 5, guidance: {enabled: true, weight: 2.0, policy: additive}}
-    ai: {scorer: surrogate, surrogate_ckpt: dummy, grammar: default, calibration: {n_mols: 0}}
+    ai: {scorer: exact, surrogate_ckpt: null, grammar: default, calibration: {n_mols: 0}}
     sampler: {n_samples: 10, batch_size: 4}
     metrics: {rdkit: true, novelty: true, uniqueness: true, diversity: internal_tanimoto}
     artifacts: {save_smiles: true, save_sdf: false, save_ai_scores: true}
