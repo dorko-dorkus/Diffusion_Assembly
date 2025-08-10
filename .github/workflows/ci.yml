@@ -13,6 +13,6 @@ jobs:
           tags: local/assembly:ci
           load: true
       - name: Check registry
-        run: docker run --rm local/assembly:ci python scripts/check_registry.py
+        run: docker run --rm local/assembly:ci python3 scripts/check_registry.py
       - name: Run tests in container
         run: docker run --rm local/assembly:ci
