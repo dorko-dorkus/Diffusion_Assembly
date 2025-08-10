@@ -5,6 +5,9 @@ data_sources: molecular descriptors and assembly indices loaded from
     ``qm9_chon_ai.csv`` provide features and labels.
 method: read the dataset, train a PyTorch regression model with k-fold cross
     validation and save resulting metrics and artifacts.
+validation: each fold uses an internal train/validation split with the model
+    chosen by lowest validation mean absolute error (MAE).  Training halts
+    early when the validation MAE fails to improve for a configured patience.
 objective: learn a fast surrogate capable of approximating the exact assembly
     index computation.
 params: model architecture, learning rate, random seed and number of folds

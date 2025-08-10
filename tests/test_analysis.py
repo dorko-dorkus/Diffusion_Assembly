@@ -20,7 +20,9 @@ params: tests exercise options such as bootstrap iterations, quantiles and
 repro: deterministic NumPy operations and fixed random seeds yield
     reproducible outputs.
 validation: running ``pytest tests/test_analysis.py`` executes the
-    assertions below.
+    assertions below, including checks for ``train_val_test_split`` and
+    ``early_stopping`` which formalise dataset partitioning and early
+    termination when validation metrics stagnate.
 """
 
 import numpy as np

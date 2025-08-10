@@ -10,8 +10,10 @@ params: ``outdir`` destination directory and ``**metrics`` arbitrary name/value
     pairs where numbers are cast to ``float`` or ``int``.
 repro: serialisation is deterministic; identical inputs yield identical
     ``metrics.json`` files.
-validation: tests or downstream consumers can load ``metrics.json`` and check
-    for expected keys and numeric types.
+validation: results typically include train, validation and test metrics along
+    with optional ``best_epoch`` from early stopping.  Tests or downstream
+    consumers can load ``metrics.json`` and check for expected keys and numeric
+    types.
 """
 
 from __future__ import annotations

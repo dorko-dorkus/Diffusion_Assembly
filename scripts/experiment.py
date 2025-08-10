@@ -12,8 +12,11 @@ metrics: pipeline evaluation statistics are written via
     results should be reported as ``mean ± std`` across seeds.
 objective: execute a single experiment and persist a manifest with
     environment details for downstream analysis.
-validation: smoke tests like ``tests/test_pipeline_smoke.py`` ensure the
-    script runs end to end and produces metrics.
+validation: experiments report separate metrics for train, validation and test
+    splits.  The best model checkpoint is selected by the highest validation
+    F1 score and training may stop early when that score plateaus for a
+    configured patience.  Smoke tests like ``tests/test_pipeline_smoke.py``
+    ensure the script runs end to end and produces metrics.
 """
 
 import hashlib, json, os, subprocess, sys, time, yaml, logging
