@@ -1,12 +1,31 @@
+"""Experiment specification for analyzing calibrator outputs.
+
+baseline: frequency tables produced by ``scripts/run_calibrators.py`` serve as
+    the reference distributions.
+method: load a calibrator CSV, fit a trimmed log–linear model of frequency
+    versus ``A`` and bootstrap slope estimates; measure Spearman correlation of
+    degeneracy against frequency.
+metrics: slope ``m``, intercept ``c``, coefficient of determination ``R²``,
+    bootstrap confidence interval for ``m`` and Spearman ``ρ``/``p`` for
+    degeneracy.
+objective: quantify how calibration frequency scales with assembly size and how
+    degeneracy relates to frequency.
+repro: ``python scripts/analyze_calibrators.py path/to/calibs.csv --alpha 0.05
+    --boot 1000`` reproduces the reported statistics.
+validation: ``pytest tests/test_calibrators.py`` and
+    ``pytest tests/test_analysis.py`` exercise the samplers and statistical
+    helpers used here.
+"""
+
 from __future__ import annotations
+
 import argparse
-import argparse
+import logging
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
-from typing import Tuple
-from math import log
 from scipy.stats import spearmanr
-import logging
 
 logger = logging.getLogger(__name__)
 

@@ -1,3 +1,21 @@
+"""Experiment specification for training the assembly-index surrogate model.
+
+baseline: a mean-value predictor establishes the performance to surpass.
+data_sources: molecular descriptors and assembly indices loaded from
+    ``qm9_chon_ai.csv`` provide features and labels.
+method: read the dataset, train a PyTorch regression model with k-fold cross
+    validation and save resulting metrics and artifacts.
+objective: learn a fast surrogate capable of approximating the exact assembly
+    index computation.
+params: model architecture, learning rate, random seed and number of folds
+    control the training behaviour.
+repro: running ``python scripts/train_surrogate.py`` writes ``cv_metrics.json``,
+    ``model.pt`` and ``calibration_plot.png`` into a timestamped ``results``
+    subdirectory.
+validation: smoke tests such as ``tests/test_guidance.py`` ensure surrogate
+    predictions integrate correctly with the diffusion pipeline.
+"""
+
 import json, os, time, numpy as np, torch, logging
 from pathlib import Path
 
