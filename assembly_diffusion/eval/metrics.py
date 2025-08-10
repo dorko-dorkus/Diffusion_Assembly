@@ -11,7 +11,8 @@ try:  # pragma: no cover - RDKit optional
     from rdkit.Chem import AllChem
     from ..qed_sa import qed_sa_distribution
 except ImportError:  # pragma: no cover - handled at runtime
-    Chem = None
+    Chem = DataStructs = AllChem = None
+    qed_sa_distribution = None
 
 from ..graph import MoleculeGraph
 from .validity import sanitize_or_none
