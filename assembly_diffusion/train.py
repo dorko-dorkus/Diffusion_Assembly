@@ -51,6 +51,53 @@ def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph) -> Union[str, tuple[int, 
     return random.choice(diff)
 
 
+def random_baseline_accuracy(
+    loader,
+    kernel: ForwardKernel,
+    policy: ReversePolicy,
+) -> float:
+    """Return accuracy of a random policy for comparison.
+
+    The function mirrors the data handling in :func:`train_epoch` but samples
+    random edits instead of using ``policy.logits``.  It provides a simple
+    control baseline to contextualise training accuracy.
+    """
+
+    policy.eval()
+    device = next(policy.parameters()).device
+    n_actions = len(policy._actions)
+    correct = 0
+    total = 0
+
+    for atom_tensor, bond_tensor in loader:
+        bond_tensor = bond_tensor.to(device, non_blocking=True)
+
+        atom_lists = []
+        for atoms in atom_tensor:
+            if isinstance(atoms, torch.Tensor):
+                atom_ids = [int(a) for a in atoms.tolist() if int(a) >= 0]
+                atom_lists.append([ATOM_TYPES[i] for i in atom_ids])
+            else:
+                atom_lists.append(list(atoms))
+        x0 = MoleculeGraph(atom_lists, bond_tensor)
+
+        B = len(atom_lists)
+        t = torch.randint(1, kernel.T + 1, (B,), device=device)
+        xt = kernel.sample_xt(x0, t)
+
+        x0_graphs = [MoleculeGraph(atom_lists[i], x0.bonds[i]) for i in range(B)]
+        xt_graphs = [MoleculeGraph(atom_lists[i], xt.bonds[i]) for i in range(B)]
+        targets = [policy._actions.index(teacher_edit(g0, gt))
+                   for g0, gt in zip(x0_graphs, xt_graphs)]
+        y = torch.tensor(targets, device=device)
+
+        rand = torch.randint(0, n_actions, (B,), device=device)
+        correct += (rand == y).sum().item()
+        total += B
+
+    return correct / total if total else 0.0
+
+
 def train_epoch(
     loader,
     kernel: ForwardKernel,
