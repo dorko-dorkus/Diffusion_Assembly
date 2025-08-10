@@ -1,8 +1,22 @@
-"""Analysis utilities for the Diffusion Assembly project.
+"""Experiment specification for statistical analysis utilities.
 
-This module collects statistical routines used in the analysis notebook
-specified in the project instructions.  The functions are lightweight so
-that they can also be executed in continuous integration environments.
+baseline: standard statistical tests and RDKit scaffold comparisons serve as
+    the reference analyses.
+data_sources: outputs from experiments such as AI scores, predictions and
+    generated SMILES.
+method: apply SciPy, statsmodels and optional RDKit routines for hypothesis
+    testing, bootstrapping and mixed-effects regression.
+objective: provide reusable helpers to quantify differences and diversity in
+    experiment results.
+params: function arguments expose sample counts, regression formulas,
+    bootstrap iterations and random seeds.
+repro: deterministic NumPy operations and optional fixed seeds yield
+    reproducible statistics.
+validation: ``tests/test_analysis.py`` covers representative functions and
+    edge cases.
+
+The functions are lightweight so that they can also be executed in continuous
+integration environments.
 """
 
 from __future__ import annotations
