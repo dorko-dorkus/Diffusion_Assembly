@@ -49,7 +49,7 @@ def _log_environment(seed: int = 0) -> None:
     np.random.seed(seed)
     try:
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except Exception:  # pragma: no cover - git may be unavailable
+    except (subprocess.CalledProcessError, OSError):  # pragma: no cover - git may be unavailable
         commit = "unknown"
     logger.info(
         "Reproducibility: seed=%s python=%s numpy=%s pandas=%s scipy=%s statsmodels=%s commit=%s",

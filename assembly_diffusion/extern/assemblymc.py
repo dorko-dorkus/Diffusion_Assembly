@@ -97,7 +97,7 @@ def _resolve_bin() -> Path:
         cfg_bin = getattr(getattr(_config, "ai", object()), "bin_path", None)
         if cfg_bin:
             return Path(cfg_bin)
-    except Exception:
+    except (ImportError, AttributeError):
         pass
     raise AssemblyMCError(
         "AssemblyMC binary not configured. Obtain permission, compile the binary, "

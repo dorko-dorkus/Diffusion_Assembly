@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - handled at runtime
 
 try:  # pragma: no cover - optional SA scorer
     from .sascorer import calculateScore as sa_score
-except Exception:  # pragma: no cover - handled at runtime
+except ImportError:  # pragma: no cover - handled at runtime
     sa_score = None
 
 _HAVE_QED = Chem is not None and QED is not None
