@@ -13,8 +13,11 @@ objective: learn a policy that predicts edits transforming noisy graphs back
     toward ground-truth molecules.
 repro: deterministic seeds, saved checkpoints and committed configs enable
     reproducible training runs.
-validation: unit tests plus optional :class:`~assembly_diffusion.monitor.RunMonitor`
-    checkpoints verify correct behaviour of the training loop.
+validation: data can be partitioned into train/validation/test splits for model
+    selection or used in cross-validation. Early stopping monitors a validation
+    metric with configurable patience to avoid overfitting, and optional
+    :class:`~assembly_diffusion.monitor.RunMonitor` checkpoints verify correct
+    behaviour of the training loop.
 """
 
 import os
@@ -23,6 +26,7 @@ import time
 from typing import Union
 
 import torch
+from torch.utils.data import DataLoader, random_split
 
 from .forward import ForwardKernel
 from .policy import ReversePolicy
@@ -30,6 +34,7 @@ from .mask import FeasibilityMask
 from .graph import MoleculeGraph
 from .backbone import ATOM_TYPES
 from .monitor import RunMonitor
+from .data import collate_graphs
 from .logging_config import get_logger
 
 
@@ -96,6 +101,84 @@ def random_baseline_accuracy(
         total += B
 
     return correct / total if total else 0.0
+
+
+def split_dataset(
+    dataset,
+    train_ratio: float = 0.8,
+    val_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    *,
+    seed: int = 0,
+):
+    """Return train, validation and test subsets from ``dataset``.
+
+    The split is deterministic given ``seed``.  Validation data are used for
+    model selection and to drive early stopping while the test subset is held
+    out for final reporting.  Ratios must sum to one; to perform cross-
+    validation, call this function repeatedly with different ``seed`` values and
+    aggregate the results.
+    """
+
+    total = train_ratio + val_ratio + test_ratio
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError("train_ratio + val_ratio + test_ratio must sum to 1.0")
+    n = len(dataset)
+    n_train = int(n * train_ratio)
+    n_val = int(n * val_ratio)
+    n_test = n - n_train - n_val
+    generator = torch.Generator().manual_seed(seed)
+    return random_split(dataset, [n_train, n_val, n_test], generator=generator)
+
+
+def evaluate_epoch(
+    loader,
+    kernel: ForwardKernel,
+    policy: ReversePolicy,
+    mask: FeasibilityMask,
+) -> dict[str, float]:
+    """Return loss and accuracy over ``loader`` without gradient updates."""
+
+    policy.eval()
+    metrics = {"loss": 0.0, "accuracy": 0.0, "n": 0}
+    device = next(policy.parameters()).device
+
+    with torch.no_grad():
+        for atom_tensor, bond_tensor in loader:
+            bond_tensor = bond_tensor.to(device, non_blocking=True)
+
+            atom_lists = []
+            for atoms in atom_tensor:
+                if isinstance(atoms, torch.Tensor):
+                    atom_ids = [int(a) for a in atoms.tolist() if int(a) >= 0]
+                    atom_lists.append([ATOM_TYPES[i] for i in atom_ids])
+                else:
+                    atom_lists.append(list(atoms))
+            x0 = MoleculeGraph(atom_lists, bond_tensor)
+
+            B = len(atom_lists)
+            t = torch.randint(1, kernel.T + 1, (B,), device=device)
+            xt = kernel.sample_xt(x0, t)
+            m = mask.mask_edits(xt)
+            logits = policy.logits(xt, t, m)
+
+            x0_graphs = [MoleculeGraph(atom_lists[i], x0.bonds[i]) for i in range(B)]
+            xt_graphs = [MoleculeGraph(atom_lists[i], xt.bonds[i]) for i in range(B)]
+            targets = [policy._actions.index(teacher_edit(g0, gt))
+                       for g0, gt in zip(x0_graphs, xt_graphs)]
+            y = torch.tensor(targets, device=device)
+
+            probs = torch.softmax(logits, dim=1)
+            ce = -torch.log(probs[torch.arange(B, device=device), y] + 1e-12)
+            preds = probs.argmax(dim=1)
+
+            metrics["accuracy"] += (preds == y).sum().item()
+            metrics["loss"] += ce.sum().item()
+            metrics["n"] += B
+
+    metrics["loss"] /= metrics["n"]
+    metrics["accuracy"] /= metrics["n"]
+    return metrics
 
 
 def train_epoch(
@@ -258,3 +341,88 @@ def train_epoch(
         metrics["accuracy"],
     )
     return metrics
+
+
+def train_model(
+    dataset,
+    kernel: ForwardKernel,
+    policy: ReversePolicy,
+    mask: FeasibilityMask,
+    optimizer,
+    *,
+    epochs: int = 10,
+    batch_size: int = 32,
+    val_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    patience: int = 5,
+    seed: int = 0,
+    writer=None,
+    ckpt_interval: int | None = 500,
+    monitor: RunMonitor | None = None,
+) -> dict[str, dict[str, float] | list[float]]:
+    """Train ``policy`` with validation-based early stopping.
+
+    ``dataset`` is split into train/validation/test subsets using
+    :func:`split_dataset`.  Model selection uses the validation loss and
+    training terminates when this metric fails to improve for ``patience``
+    consecutive epochs.  The returned dictionary contains metrics for the
+    train, validation and test loaders alongside the validation loss history.
+    """
+
+    train_set, val_set, test_set = split_dataset(
+        dataset,
+        train_ratio=1 - val_ratio - test_ratio,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+    )
+
+    def make_loader(ds, shuffle: bool) -> DataLoader:
+        return DataLoader(
+            ds,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=collate_graphs,
+            pin_memory=torch.cuda.is_available(),
+            num_workers=min(4, os.cpu_count() or 0),
+        )
+
+    train_loader = make_loader(train_set, True)
+    val_loader = make_loader(val_set, False)
+    test_loader = make_loader(test_set, False)
+
+    best_val = float("inf")
+    no_improve = 0
+    val_history: list[float] = []
+    train_metrics = {}
+    val_metrics = {}
+    for epoch in range(epochs):
+        train_metrics = train_epoch(
+            train_loader,
+            kernel,
+            policy,
+            mask,
+            optimizer,
+            epoch=epoch,
+            writer=writer,
+            ckpt_interval=ckpt_interval,
+            monitor=monitor,
+        )
+        val_metrics = evaluate_epoch(val_loader, kernel, policy, mask)
+        val_history.append(val_metrics["loss"])
+        if val_metrics["loss"] < best_val:
+            best_val = val_metrics["loss"]
+            no_improve = 0
+        else:
+            no_improve += 1
+            if no_improve >= patience:
+                logger.info("Early stopping triggered at epoch %d", epoch + 1)
+                break
+
+    test_metrics = evaluate_epoch(test_loader, kernel, policy, mask)
+    return {
+        "train": train_metrics,
+        "val": val_metrics,
+        "test": test_metrics,
+        "val_history": val_history,
+    }
