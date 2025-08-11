@@ -67,7 +67,7 @@ def setup_reproducibility(seed: int) -> None:
             for d in importlib_metadata.distributions()
         )
         logger.info("Package versions:\n%s", "\n".join(packages))
-    except Exception as exc:  # pragma: no cover - best effort
+    except (importlib_metadata.PackageNotFoundError, OSError, KeyError) as exc:  # pragma: no cover - best effort
         logger.warning("Failed to list package versions: %s", exc)
 
     try:
@@ -76,7 +76,7 @@ def setup_reproducibility(seed: int) -> None:
             ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
         ).strip()
         logger.info("Git commit SHA: %s", commit)
-    except Exception as exc:  # pragma: no cover - best effort
+    except (subprocess.CalledProcessError, OSError) as exc:  # pragma: no cover - best effort
         logger.warning("Failed to obtain git commit SHA: %s", exc)
 
 

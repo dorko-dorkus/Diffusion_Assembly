@@ -70,7 +70,7 @@ def configure_reproducibility(seed: int) -> None:
         import numpy as np  # type: ignore
 
         np.random.seed(seed)
-    except Exception:  # pragma: no cover - optional dependency
+    except ImportError:  # pragma: no cover - optional dependency
         pass
     try:
         import torch  # type: ignore
@@ -78,7 +78,7 @@ def configure_reproducibility(seed: int) -> None:
         torch.manual_seed(seed)
         if torch.cuda.is_available():  # pragma: no cover - GPU optional
             torch.cuda.manual_seed_all(seed)
-    except Exception:  # pragma: no cover - optional dependency
+    except ImportError:  # pragma: no cover - optional dependency
         pass
 
     logger.info("Random seed set to %d", seed)

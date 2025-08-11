@@ -58,7 +58,7 @@ def _load_labels(csv_path: str) -> np.ndarray:
         y = df.get("ai_exact")
         if y is not None and len(y) > 0:
             return y.to_numpy(dtype=float)
-    except Exception:  # pragma: no cover - file may be missing/empty
+    except (OSError, pd.errors.EmptyDataError):  # pragma: no cover - file may be missing/empty
         logger.warning("Could not load %s; using synthetic labels", csv_path)
     return np.array([0.0, 1.0, 2.0], dtype=float)
 

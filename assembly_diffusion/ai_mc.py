@@ -49,7 +49,7 @@ def _brics_cuts(mol: "Chem.Mol") -> List[Tuple[int, int]]:
                 brics.append((i, j))
             if brics:
                 bonds = brics
-        except Exception:  # pragma: no cover - defensive against RDKit issues
+        except (ValueError, RuntimeError):  # pragma: no cover - defensive against RDKit issues
             pass
     return bonds
 

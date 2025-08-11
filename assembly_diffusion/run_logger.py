@@ -28,7 +28,7 @@ def _git_hash() -> str:
             .decode()
             .strip()
         )
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         return "unknown"
 
 
@@ -53,14 +53,14 @@ def _set_seeds(seed: int) -> Dict[str, int]:
 
         np.random.seed(seed)
         seeds["numpy"] = seed
-    except Exception:
+    except ImportError:
         pass
     try:  # Optional torch seed
         import torch  # type: ignore
 
         torch.manual_seed(seed)
         seeds["torch"] = seed
-    except Exception:
+    except ImportError:
         pass
     return seeds
 
@@ -77,7 +77,7 @@ def reset_run_logger() -> None:
         _RUN_LOGGER.removeHandler(handler)
         try:
             handler.close()
-        except Exception:
+        except OSError:
             pass
 
 

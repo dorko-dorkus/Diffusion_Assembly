@@ -11,22 +11,22 @@ import numpy as np
 
 try:  # Optional dependencies; versions logged if installed
     import pandas as pd
-except Exception:  # pragma: no cover - pandas may be absent
+except ImportError:  # pragma: no cover - pandas may be absent
     pd = None  # type: ignore
 
 try:
     import scipy
-except Exception:  # pragma: no cover - scipy may be absent
+except ImportError:  # pragma: no cover - scipy may be absent
     scipy = None  # type: ignore
 
 try:
     import statsmodels
-except Exception:  # pragma: no cover - statsmodels may be absent
+except ImportError:  # pragma: no cover - statsmodels may be absent
     statsmodels = None  # type: ignore
 
 try:
     import torch
-except Exception:  # pragma: no cover - torch may be absent
+except ImportError:  # pragma: no cover - torch may be absent
     torch = None  # type: ignore
 
 
@@ -48,7 +48,7 @@ def setup_reproducibility(seed: int = 0) -> None:
 
     try:
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except Exception:  # pragma: no cover - git may be unavailable
+    except (subprocess.CalledProcessError, OSError):  # pragma: no cover - git may be unavailable
         commit = "unknown"
 
     logger = logging.getLogger(__name__)
