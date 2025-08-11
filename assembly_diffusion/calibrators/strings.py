@@ -1,5 +1,8 @@
 from __future__ import annotations
+import itertools
+import math
 import torch
+import pandas as pd
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -64,3 +67,35 @@ class StringGrammar:
     def D_min(x: str) -> int:
         # Under simple concatenation with atomic symbols, there is only 1 minimal pathway per string.
         return 1
+
+    @classmethod
+    def enumerate(cls, L_max: int) -> pd.DataFrame:
+        """Enumerate all strings of length ``≤ L_max``.
+
+        Returns a DataFrame compatible with :meth:`Sampler.sample_S` containing
+        exact counts of minimal pathways.  Each string occurs once and has
+        ``d_min = 1``.  The ``frequency`` column is normalised over the entire
+        enumeration.
+        """
+
+        rows = []
+        total = sum(len(cls.P) ** L for L in range(1, L_max + 1))
+        freq = 1.0 / total
+        for L in range(1, L_max + 1):
+            for symbols in itertools.product(cls.P, repeat=L):
+                s = "".join(symbols)
+                A = cls.A_star(s)
+                rows.append(
+                    {
+                        "id": cls.canonical_id(s),
+                        "universe": "S",
+                        "grammar": f"S_v0_L{L_max}",
+                        "As_lower": A,
+                        "As_upper": A,
+                        "validity": 1,
+                        "frequency": freq,
+                        "d_min": cls.D_min(s),
+                    }
+                )
+
+        return pd.DataFrame(rows)
