@@ -50,6 +50,13 @@ The QM9 dataset is downloaded on demand. By default files are stored in a
 SHA-256 checksum and corrupted archives trigger a clear error so they can be
 re-downloaded.
 
+### AssemblyMC binaries
+
+The project can interface with an optional `AssemblyMC` executable. This
+component is distributed separately and is intended for **local use only**.
+Do not commit any `AssemblyMC` binaries or archives to the repository; the
+included `.gitignore` prevents them from being tracked.
+
 ## Usage
 
 Once installed, the package exposes a small command line interface that can
