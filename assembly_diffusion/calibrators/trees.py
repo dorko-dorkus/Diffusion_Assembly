@@ -1,6 +1,8 @@
 from __future__ import annotations
 import itertools
+import math
 import torch
+import pandas as pd
 from dataclasses import dataclass
 from typing import List, Tuple
 import networkx as nx
@@ -88,3 +90,51 @@ class TreeGrammar:
             if TreeGrammar.canonical_id(G_seq) == target_id:
                 count += 1
         return count
+
+    @classmethod
+    def enumerate(cls, N_max: int, N_limit: int = 9) -> pd.DataFrame:
+        """Enumerate all trees with ``2 ≤ N ≤ N_max``.
+
+        The enumeration explores every minimal attachment sequence and groups
+        isomorphic graphs, yielding exact ``d_min`` counts.  ``N_max`` is
+        restricted to ``N_limit`` to avoid combinatorial explosion.
+        """
+
+        if N_max > N_limit:
+            raise ValueError(
+                f"Tree enumeration limited to N_max ≤ {N_limit}; got N_max={N_max}"
+            )
+
+        rows = []
+        for N in range(2, N_max + 1):
+            parent_choices = [list(range(t)) for t in range(1, N)]
+            graphs: list[nx.Graph] = []
+            counts: list[int] = []
+            for parents in itertools.product(*parent_choices):
+                edges = [(parents[t - 1], t) for t in range(1, N)]
+                G = cls.to_graph(edges)
+                for i, H in enumerate(graphs):
+                    if nx.is_isomorphic(H, G):
+                        counts[i] += 1
+                        break
+                else:
+                    graphs.append(G)
+                    counts.append(1)
+
+            total = math.factorial(N - 1)
+            for G, c in zip(graphs, counts):
+                A = cls.A_star(G)
+                rows.append(
+                    {
+                        "id": cls.canonical_id(G),
+                        "universe": "T",
+                        "grammar": f"T_v0_N{N_max}",
+                        "As_lower": A,
+                        "As_upper": A,
+                        "validity": 1,
+                        "frequency": c / total,
+                        "d_min": c,
+                    }
+                )
+
+        return pd.DataFrame(rows)
