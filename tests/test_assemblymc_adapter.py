@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from assembly_diffusion.extern.assemblymc import a_star_and_dmin, AssemblyMCError, AssemblyMCTimeout
+if "ASSEMBLYMC_BIN" not in os.environ:
+    pytest.skip("ASSEMBLYMC_BIN not set", allow_module_level=True)
+
+from assembly_diffusion.extern.assemblymc import a_star_and_dmin, AssemblyMCTimeout
 
 
 def _dummy_binary(path: Path) -> Path:
@@ -26,14 +29,6 @@ with open('stats.json', 'w') as f:
     )
     script.chmod(0o755)
     return script
-
-
-def test_missing_env_var_skip(monkeypatch):
-    monkeypatch.delenv("ASSEMBLYMC_BIN", raising=False)
-    try:
-        a_star_and_dmin("C")
-    except AssemblyMCError as e:
-        pytest.skip(str(e))
 
 
 def test_cache_speedup_and_output(monkeypatch, tmp_path):
