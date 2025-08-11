@@ -4,13 +4,33 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING, Any
 
-from rdkit import Chem
-from rdkit.Chem import inchi
-from rdkit.Chem.rdchem import Mol, MolSanitizeException
+try:  # pragma: no cover - RDKit optional
+    from rdkit import Chem
+    from rdkit.Chem import inchi
+    from rdkit.Chem.rdchem import MolSanitizeException
+    _HAVE_RDKIT = True
+except ImportError:  # pragma: no cover - handled at runtime
+    Chem = None  # type: ignore[assignment]
+    inchi = None  # type: ignore[assignment]
+    MolSanitizeException = RuntimeError
+    _HAVE_RDKIT = False
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from rdkit.Chem.rdchem import Mol
+else:  # pragma: no cover - typing fallback
+    Mol = Any  # type: ignore[misc,assignment]
 
 __all__ = ["smiles_to_mol", "mol_to_smiles", "canonicalize_smiles"]
+
+
+def _require_rdkit() -> None:
+    if not _HAVE_RDKIT:
+        raise ImportError(
+            "RDKit is required for canonicalisation; install via "
+            "'conda install -c conda-forge rdkit'."
+        )
 
 
 def smiles_to_mol(smiles: str) -> Mol:
@@ -19,6 +39,7 @@ def smiles_to_mol(smiles: str) -> Mol:
     Raises:
         ValueError: If the SMILES string is invalid.
     """
+    _require_rdkit()
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES: {smiles}")
@@ -31,6 +52,7 @@ def smiles_to_mol(smiles: str) -> Mol:
 
 def mol_to_smiles(mol: Mol) -> str:
     """Return the canonical SMILES representation of a molecule."""
+    _require_rdkit()
     return Chem.MolToSmiles(mol, isomericSmiles=True, canonical=True)
 
 
