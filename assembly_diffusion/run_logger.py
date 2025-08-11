@@ -5,6 +5,7 @@ import logging
 import random
 import subprocess
 import sys
+import platform
 from importlib import metadata
 from pathlib import Path
 from typing import Dict, Optional
@@ -72,9 +73,10 @@ def init_run_logger(
 ) -> logging.Logger:
     """Initialise a file logger that writes a JSON header.
 
-    The header contains RNG seeds, package versions, git commit hash, the
-    grammar label, and the configuration blob.  It is written to the log
-    file before any other records.
+    The header contains RNG seeds, package versions, git commit hash,
+    operating system details, the command line, the grammar label, and the
+    configuration blob.  It is written to the log file before any other
+    records.
     """
 
     if _RUN_LOGGER.handlers:
@@ -86,6 +88,8 @@ def init_run_logger(
         "seeds": seeds,
         "packages": _package_versions(),
         "git_hash": _git_hash(),
+        "windows_version": platform.platform(),
+        "command": " ".join(sys.argv),
         "grammar": grammar,
         "config": config,
     }
