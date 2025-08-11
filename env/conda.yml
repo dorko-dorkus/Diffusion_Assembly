@@ -1,0 +1,9 @@
+name: assembly_diffusion
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - rdkit=2024.09.6
+  - pip
+  - pip:
+      - -r env.lock
