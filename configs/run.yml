@@ -1,0 +1,7 @@
+seeds: [0]
+N_samp: 8
+guidance: 0.0
+ai:
+  method: surrogate
+  trials: 1
+  timeout_s: 5
