@@ -4,12 +4,14 @@ from typing import Iterable
 
 from .graph import MoleculeGraph
 
-try:  # pragma: no cover - optional dependency
+try:  # pragma: no cover - RDKit is optional
     from rdkit import Chem
     from rdkit.Chem import BRICS
+    _HAVE_RDKIT = True
 except ImportError:  # pragma: no cover - handled at runtime
-    Chem = None
-    BRICS = None
+    Chem = None  # type: ignore[assignment]
+    BRICS = None  # type: ignore[assignment]
+    _HAVE_RDKIT = False
 
 
 def fragmenter(graph: MoleculeGraph) -> Iterable[str]:
@@ -18,7 +20,7 @@ def fragmenter(graph: MoleculeGraph) -> Iterable[str]:
     If RDKit is unavailable a crude fallback concatenates atomic symbols into a
     single fragment.
     """
-    if Chem is None or BRICS is None:
+    if not _HAVE_RDKIT:
         return ["".join(graph.atoms)]
     mol = graph.to_rdkit()
     return list(BRICS.BRICSDecompose(mol))

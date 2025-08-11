@@ -34,7 +34,7 @@ To get started locally:
 ### RDKit
 
 RDKit is an optional dependency used for molecule manipulation and loading the QM9 dataset.  The project is tested against
-`rdkit` version `2024.9.6`. It is often easier to install via conda:
+and expects `rdkit==2024.9.6`. It is often easier to install via conda:
 
 ```bash
 conda install -c conda-forge rdkit=2024.9.6
