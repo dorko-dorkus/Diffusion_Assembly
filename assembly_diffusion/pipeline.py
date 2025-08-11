@@ -290,7 +290,8 @@ def run_pipeline(
     (e.g. when RDKit is unavailable).
     """
     # 1) Sanity checks and RDKit requirement
-    # RDKit is optional for smoke tests. Metrics are gated below.
+    # RDKit is optional; enforce only if RDKit metrics are enabled.
+    _require_rdkit(cfg)
 
     # 2) Sample molecules using existing sampler
     n_samples = int(cfg["sampler"]["n_samples"])
