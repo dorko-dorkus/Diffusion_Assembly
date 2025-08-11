@@ -2,6 +2,8 @@
 
 baseline: frequency tables produced by ``scripts/run_calibrators.py`` serve as
     the reference distributions.
+control: passing ``--baseline`` shuffles frequencies to break structure,
+    providing a simple control run for comparison.
 method: load a calibrator CSV, fit a trimmed log–linear model of frequency
     versus ``A`` and bootstrap slope estimates; measure Spearman correlation of
     degeneracy against frequency.
@@ -52,6 +54,11 @@ parser.add_argument("--boot", type=int, default=1000)
 parser.add_argument("--cv", type=int, default=1, help="number of cross-validation folds")
 parser.add_argument("--patience", type=int, default=0, help="early stopping patience in folds")
 parser.add_argument("--seed", type=int, default=0, help="random seed for reproducibility")
+parser.add_argument(
+    "--baseline",
+    action="store_true",
+    help="include control run with shuffled frequencies",
+)
 
 
 def fit_logfreq_vs_A(df: pd.DataFrame, trim_quant: float = 0.05) -> Tuple[float, float, float]:
@@ -160,37 +167,73 @@ def degeneracy_spearman(df: pd.DataFrame) -> Tuple[float, float]:
         return np.nan, np.nan
     return float(np.nanmean(rhos)), float(np.nanmean(ps))
 
+
+def shuffle_frequencies(df: pd.DataFrame, seed: int) -> pd.DataFrame:
+    """Return a copy of ``df`` with frequencies randomly permuted.
+
+    This serves as a simple control run that destroys any relationship between
+    assembly size and frequency while preserving the marginal distribution of
+    counts.
+    """
+
+    shuffled = df.copy()
+    rng = np.random.default_rng(seed)
+    shuffled["frequency"] = rng.permutation(shuffled["frequency"].to_numpy())
+    return shuffled
+
 if __name__ == "__main__":
     args = parser.parse_args()
     setup_reproducibility(args.seed)
     df = pd.read_csv(args.csv)
+    df_base = shuffle_frequencies(df, seed=args.seed) if args.baseline else None
     if args.cv > 1:
         best = kfold_cv(df, args.cv, patience=args.patience, seed=args.seed)
         rho, p = degeneracy_spearman(df)
-        logger.info(
-            "%s",
-            {
-                "m": best["m"],
-                "R2_train": best["R2_train"],
-                "R2_val": best["R2_val"],
-                "rho_deg": rho,
-                "p_deg": p,
-                "folds": best["folds_evaluated"],
-                "N_rows": int(df.shape[0]),
-            },
-        )
+        result = {
+            "m": best["m"],
+            "R2_train": best["R2_train"],
+            "R2_val": best["R2_val"],
+            "rho_deg": rho,
+            "p_deg": p,
+            "folds": best["folds_evaluated"],
+            "N_rows": int(df.shape[0]),
+        }
+        if args.baseline and df_base is not None:
+            best_base = kfold_cv(df_base, args.cv, patience=args.patience, seed=args.seed)
+            rho_b, p_b = degeneracy_spearman(df_base)
+            result.update(
+                {
+                    "m_baseline": best_base["m"],
+                    "R2_train_baseline": best_base["R2_train"],
+                    "R2_val_baseline": best_base["R2_val"],
+                    "rho_deg_baseline": rho_b,
+                    "p_deg_baseline": p_b,
+                }
+            )
+        logger.info("%s", result)
     else:
         m, c, r2 = fit_logfreq_vs_A(df)
         m_lo, m_hi = bootstrap_ci(df, alpha=args.alpha, B=args.boot)
         rho, p = degeneracy_spearman(df)
-        logger.info(
-            "%s",
-            {
-                "m": m,
-                "m_CI": [m_lo, m_hi],
-                "R2": r2,
-                "rho_deg": rho,
-                "p_deg": p,
-                "N_rows": int(df.shape[0]),
-            },
-        )
+        result = {
+            "m": m,
+            "m_CI": [m_lo, m_hi],
+            "R2": r2,
+            "rho_deg": rho,
+            "p_deg": p,
+            "N_rows": int(df.shape[0]),
+        }
+        if args.baseline and df_base is not None:
+            m_b, c_b, r2_b = fit_logfreq_vs_A(df_base)
+            m_lo_b, m_hi_b = bootstrap_ci(df_base, alpha=args.alpha, B=args.boot)
+            rho_b, p_b = degeneracy_spearman(df_base)
+            result.update(
+                {
+                    "m_baseline": m_b,
+                    "m_CI_baseline": [m_lo_b, m_hi_b],
+                    "R2_baseline": r2_b,
+                    "rho_deg_baseline": rho_b,
+                    "p_deg_baseline": p_b,
+                }
+            )
+        logger.info("%s", result)
