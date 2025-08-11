@@ -17,6 +17,7 @@ __all__ = [
     "ai_surrogate",
     "ai_mc",
     "assembly_index",
+    "compute_ai",
     "run_logger",
     "canonicalize",
 ]
