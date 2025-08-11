@@ -1,36 +1,131 @@
-"""Aggregate results placeholder script.
+#!/usr/bin/env python3
+"""
+Aggregate per-molecule AI results into A-bin counts for slope fitting.
 
-This thin wrapper will eventually collate outputs from earlier pipeline steps.
-The current implementation only supports a ``--dry-run`` flag for interface
-testing.
+Input (from compute_ai.py):
+    id,smiles,As_lower,As_upper,d_min,validity,method,status,elapsed_ms
+Output (--out): CSV with columns:
+    A,count,frequency,valid_n,invalid_n
+
+The interface is flag tolerant: ``--in``/``--input``/``-i`` and
+``--out``/``--output``/``-o`` are accepted, while unknown additional
+arguments are ignored for forward compatibility.
 """
 
 from __future__ import annotations
 
 import argparse
-import logging
+import pathlib
+import sys
+
+import numpy as np
+import pandas as pd
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def _arg_parser() -> argparse.ArgumentParser:
+    """Create an argument parser accepting several flag synonyms."""
+
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("--in", dest="inp")
+    ap.add_argument("--input", dest="inp")
+    ap.add_argument("-i", dest="inp")
+    ap.add_argument("--out", dest="out")
+    ap.add_argument("--output", dest="out")
+    ap.add_argument("-o", dest="out")
+    ap.add_argument("--universe", default="M")
+    ap.add_argument("--grammar", default=None)
+    return ap
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Aggregate pipeline outputs")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show intended actions without executing",
+def _read_any(p: str) -> pd.DataFrame:
+    """Read CSV/TSV/Parquet depending on extension."""
+
+    path = pathlib.Path(p)
+    if not path.exists():
+        sys.exit(f"--in not found: {path}")
+    ext = path.suffix.lower()
+    if ext in (".csv", ".txt"):
+        return pd.read_csv(path)
+    if ext == ".tsv":
+        return pd.read_csv(path, sep="\t")
+    if ext in (".parquet", ".pq"):
+        return pd.read_parquet(path)
+    sys.exit(f"Unsupported input extension: {ext}")
+
+
+def _mid_A(lo: int, hi: int) -> int:
+    """Return midpoint rounded to nearest integer."""
+
+    return int(round((int(lo) + int(hi)) / 2.0))
+
+
+def main() -> int:
+    ap = _arg_parser()
+    args, unknown = ap.parse_known_args()
+    if unknown:
+        print(
+            "WARN aggregate.py: ignoring extra args:",
+            " ".join(unknown),
+            file=sys.stderr,
+        )
+
+    if not args.inp or not args.out:
+        ap.print_help()
+        sys.exit(2)
+
+    df = _read_any(args.inp)
+    required = {"id", "smiles", "As_lower", "As_upper", "validity", "status", "method"}
+    if not required.issubset(df.columns):
+        sys.exit(f"Input missing columns: {sorted(required - set(df.columns))}")
+
+    df = df.copy()
+    df["A"] = [_mid_A(lo, hi) for lo, hi in zip(df["As_lower"], df["As_upper"])]
+    df["valid"] = (df["validity"].astype(int) == 1) & (df["status"] == "ok")
+    df["invalid"] = ~df["valid"]
+
+    g = df.groupby("A", as_index=False).agg(
+        count=("A", "size"),
+        valid_n=("valid", "sum"),
+        invalid_n=("invalid", "sum"),
     )
-    args = parser.parse_args(argv)
+    total = float(len(df)) if len(df) else 1.0
+    g["frequency"] = g["count"] / total
+    g = g.sort_values("A").reset_index(drop=True)
 
-    if args.dry_run:
-        logger.info("Dry run: no action taken")
-        return 0
+    out = pathlib.Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    g.to_csv(out, index=False)
 
-    logger.info("Aggregation step is not yet implemented")
+    # Produce protocol-ready per-object CSV for downstream integration.
+    try:
+        proto = df.merge(
+            df.groupby("smiles")["smiles"].transform("count").rename("smiles_count"),
+            left_index=True,
+            right_index=True,
+            how="left",
+        )
+    except Exception:
+        proto = df.copy()
+        proto["smiles_count"] = 1
+    proto["frequency"] = proto["smiles_count"] / total
+    grammar = args.grammar or ("G_MC" if (df["method"] == "assemblymc").any() else "G")
+    proto_out = out.with_name("protocol_objects.csv")
+    cols = ["id", "smiles", "As_lower", "As_upper", "validity", "frequency", "d_min"]
+    for c in cols:
+        if c not in proto.columns:
+            proto[c] = np.nan
+    proto = proto[cols]
+    proto.insert(1, "universe", args.universe)
+    proto.insert(2, "grammar", grammar)
+    proto.to_csv(proto_out, index=False)
+
+    print(
+        f"bins={len(g)} total={int(total)} "
+        f"wrote_agg={out} wrote_protocol={proto_out}"
+    )
     return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
     raise SystemExit(main())
+
