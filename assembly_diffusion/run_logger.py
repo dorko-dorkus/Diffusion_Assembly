@@ -34,7 +34,7 @@ def _git_hash() -> str:
 def _package_versions() -> Dict[str, str]:
     """Best-effort collection of package versions."""
     versions: Dict[str, str] = {}
-    for pkg in ("assembly_diffusion", "numpy", "torch"):
+    for pkg in ("assembly_diffusion", "numpy", "torch", "rdkit"):
         try:
             versions[pkg] = metadata.version(pkg)
         except metadata.PackageNotFoundError:
@@ -44,13 +44,16 @@ def _package_versions() -> Dict[str, str]:
 
 
 def _set_seeds(seed: int) -> Dict[str, int]:
-    import numpy as np
-
     seeds: Dict[str, int] = {}
     random.seed(seed)
     seeds["python"] = seed
-    np.random.seed(seed)
-    seeds["numpy"] = seed
+    try:
+        import numpy as np
+
+        np.random.seed(seed)
+        seeds["numpy"] = seed
+    except Exception:
+        pass
     try:  # Optional torch seed
         import torch  # type: ignore
 

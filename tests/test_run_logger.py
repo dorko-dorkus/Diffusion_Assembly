@@ -1,12 +1,12 @@
 import json
 
-from assembly_diffusion import logging as run_logging
+from assembly_diffusion import run_logger
 
 
 def test_run_log_contains_header(tmp_path):
     log_file = tmp_path / "run.log"
     cfg = {"alpha": 1}
-    logger = run_logging.init_run_logger(str(log_file), grammar="G", config=cfg, seed=42)
+    logger = run_logger.init_run_logger(str(log_file), grammar="G", config=cfg, seed=42)
     logger.info("run start")
     lines = log_file.read_text().splitlines()[:5]
     header = None
