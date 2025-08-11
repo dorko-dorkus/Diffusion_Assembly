@@ -23,6 +23,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ..repro import setup_reproducibility
+
 SCHEMA_VERSION = "1.1"
 
 
@@ -46,6 +48,9 @@ def write_metrics(outdir: str, **metrics: Any) -> None:
         for JSON serialisation; other types (e.g. lists for CIs) are stored as
         provided.
     """
+
+    seed = int(metrics.get("seed", 0))
+    setup_reproducibility(seed)
 
     payload: dict[str, Any] = {"schema_version": SCHEMA_VERSION}
     for key, value in metrics.items():

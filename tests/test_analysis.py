@@ -29,6 +29,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from assembly_diffusion.repro import setup_reproducibility
+
+setup_reproducibility(0)
+
 from analysis import (
     ks_test,
     scaffold_diversity,

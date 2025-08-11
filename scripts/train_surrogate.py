@@ -22,6 +22,11 @@ validation: smoke tests such as ``tests/test_guidance.py`` ensure surrogate
 import json, os, time, numpy as np, torch, logging
 from pathlib import Path
 
+from assembly_diffusion.repro import setup_reproducibility
+
+SEED = int(os.environ.get("SEED", "0"))
+setup_reproducibility(SEED)
+
 logger = logging.getLogger(__name__)
 
 # TODO(#1, @model-team, 2024-10-01): load features + labels, define model, train, k-fold, save metrics
