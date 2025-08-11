@@ -4,6 +4,6 @@ numpy
 pandas
 scipy
 statsmodels
-rdkit-pypi>=2022.9.5
+rdkit>=2024.3
 
 networkx
