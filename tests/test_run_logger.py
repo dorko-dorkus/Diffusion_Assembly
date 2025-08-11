@@ -1,5 +1,4 @@
 import json
-import subprocess
 
 from assembly_diffusion import run_logger
 
@@ -35,9 +34,7 @@ def test_run_log_contains_header(tmp_path):
     ]:
         assert key in header
 
-    expected_hash = (
-        subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    )
+    expected_hash = run_logger._git_hash()
     assert header["git_hash"] == expected_hash
     assert header["grammar"] == "G_MC"
     assert header["config"] == cfg
