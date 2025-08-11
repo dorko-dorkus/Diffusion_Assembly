@@ -51,7 +51,7 @@ Write-Host ">>> Sampling $N molecules"
 python scripts/sample.py --n $N --out "$RUN_DIR/samples.csv" | Tee-Object "$RUN_DIR/sample.log"
 
 Write-Host ">>> Computing A* via AssemblyMC (trials=$TRIALS, timeout_s=$TIMEOUT_S)"
-python scripts/compute_ai.py --in "$RUN_DIR/samples.csv" --out "$RUN_DIR/ai.csv" --method assemblymc --trials $TRIALS --timeout-s $TIMEOUT_S | Tee-Object "$RUN_DIR/ai.log"
+python scripts/compute_ai.py --in "$RUN_DIR/samples.csv" --out "$RUN_DIR/ai.csv" --method assemblymc --trials $TRIALS --timeout-s $TIMEOUT_S --allow-fallback | Tee-Object "$RUN_DIR/ai.log"
 
 Write-Host ">>> Aggregating metrics"
 python scripts/aggregate.py --in "$RUN_DIR/ai.csv" --out "$RUN_DIR/agg.csv" | Tee-Object "$RUN_DIR/agg.log"

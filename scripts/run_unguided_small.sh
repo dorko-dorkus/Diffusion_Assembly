@@ -44,7 +44,7 @@ python scripts/sample.py --n "$N" --out "$RUN_DIR/samples.csv" | tee "$RUN_DIR/s
 
 echo ">>> Computing A* via AssemblyMC (trials=$TRIALS, timeout_s=$TIMEOUT_S)"
 python scripts/compute_ai.py --in "$RUN_DIR/samples.csv" --out "$RUN_DIR/ai.csv" \
-  --method assemblymc --trials "$TRIALS" --timeout-s "$TIMEOUT_S" | tee "$RUN_DIR/ai.log"
+  --method assemblymc --trials "$TRIALS" --timeout-s "$TIMEOUT_S" --allow-fallback | tee "$RUN_DIR/ai.log"
 
 echo ">>> Aggregating metrics"
 python scripts/aggregate.py --in "$RUN_DIR/ai.csv" --out "$RUN_DIR/agg.csv" | tee "$RUN_DIR/agg.log"
