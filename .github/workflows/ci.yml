@@ -17,4 +17,7 @@ jobs:
       - name: Check registry
         run: docker run --rm local/assembly:ci micromamba run -n app python scripts/check_registry.py
       - name: Run tests in container
-        run: docker run --rm local/assembly:ci
+        run: docker run --rm local/assembly:ci micromamba run -n app pytest -q -rs
+      - name: Audit for AssemblyMC artifacts
+        run: |
+          docker run --rm local/assembly:ci sh -lc "if find /app -name 'AssemblyMC*' -print | grep -q .; then echo 'AssemblyMC artifacts found'; exit 1; else echo 'No AssemblyMC artifacts'; fi"
