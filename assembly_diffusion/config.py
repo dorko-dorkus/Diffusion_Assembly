@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, get_type_hints
 
+import warnings
 import yaml
 
 
@@ -106,8 +107,16 @@ def load_run_config(path: str | Path) -> RunConfig:
     seeds = [int(s) for s in (seeds_raw if isinstance(seeds_raw, list) else [seeds_raw])]
 
     ai_raw = raw.get("ai", {})
+    method = str(ai_raw.get("method", "surrogate"))
+    if method == "exact":
+        warnings.warn(
+            "ai.method='exact' is deprecated; use 'assemblymc' instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        method = "assemblymc"
     ai_cfg = AIConfig(
-        method=str(ai_raw.get("method", "surrogate")),
+        method=method,
         trials=int(ai_raw.get("trials", 1)),
         timeout_s=float(ai_raw.get("timeout_s", 0.0)),
     )
