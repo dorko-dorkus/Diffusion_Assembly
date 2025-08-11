@@ -41,6 +41,7 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from analysis import early_stopping
+from assembly_diffusion.repro import setup_reproducibility
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ parser.add_argument("--alpha", type=float, default=0.05)
 parser.add_argument("--boot", type=int, default=1000)
 parser.add_argument("--cv", type=int, default=1, help="number of cross-validation folds")
 parser.add_argument("--patience", type=int, default=0, help="early stopping patience in folds")
+parser.add_argument("--seed", type=int, default=0, help="random seed for reproducibility")
 
 
 def fit_logfreq_vs_A(df: pd.DataFrame, trim_quant: float = 0.05) -> Tuple[float, float, float]:
@@ -107,10 +109,10 @@ def eval_logfreq_vs_A(
     return float(1.0 - ss_res / ss_tot) if ss_tot > 0 else 0.0
 
 
-def kfold_cv(df: pd.DataFrame, k: int, patience: int = 0) -> Dict[str, float]:
+def kfold_cv(df: pd.DataFrame, k: int, patience: int = 0, seed: int = 0) -> Dict[str, float]:
     """Return metrics from k-fold cross-validation with early stopping."""
 
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(seed)
     indices = rng.permutation(len(df))
     fold_sizes = np.full(k, len(df) // k, dtype=int)
     fold_sizes[: len(df) % k] += 1
@@ -160,9 +162,10 @@ def degeneracy_spearman(df: pd.DataFrame) -> Tuple[float, float]:
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    setup_reproducibility(args.seed)
     df = pd.read_csv(args.csv)
     if args.cv > 1:
-        best = kfold_cv(df, args.cv, patience=args.patience)
+        best = kfold_cv(df, args.cv, patience=args.patience, seed=args.seed)
         rho, p = degeneracy_spearman(df)
         logger.info(
             "%s",
