@@ -18,4 +18,5 @@ __all__ = [
     "ai_mc",
     "assembly_index",
     "run_logger",
+    "canonicalize",
 ]
