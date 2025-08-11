@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN="$DIR/AssemblyMC.exe"
+
+if [[ "$1" == "--help" ]]; then
+  echo "Wrapper for AssemblyMC.exe" >&2
+  echo "Download AssemblyMC.zip from the upstream project, rename it to AssemblyMC.exe, and place it alongside this script." >&2
+  echo "On non-Windows platforms this script uses Wine to execute the binary." >&2
+  if command -v wine >/dev/null 2>&1 && [[ -f "$BIN" ]]; then
+    exec wine "$BIN" --help
+  else
+    exit 0
+  fi
+fi
+
+if [[ ! -f "$BIN" ]]; then
+  echo "AssemblyMC.exe not found at $BIN" >&2
+  exit 1
+fi
+
+if command -v wine >/dev/null 2>&1; then
+  exec wine "$BIN" "$@"
+else
+  echo "AssemblyMC binary requires Wine on non-Windows platforms." >&2
+  exit 1
+fi
