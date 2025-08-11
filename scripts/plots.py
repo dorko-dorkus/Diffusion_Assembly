@@ -1,35 +1,146 @@
-"""Plot generation placeholder script.
-
-The plotting step will visualise results from the pipeline.  At present the
-script merely provides a ``--dry-run`` flag for interface testing.
+#!/usr/bin/env python3
 """
+Make baseline plots for the unguided run.
 
+Inputs:
+  --in / --input / -i          Path to agg.csv with columns: A,count,frequency
+  --outdir / --output / -o     Directory to write figures
+  --slope PATH                 Optional path to slope.json (with keys m,c,ci95)
+  --format {png,svg}           Default: png
+  --dpi INT                    Default: 120
+(Unknown extra args are ignored.)
+
+Outputs (in --outdir):
+  freq_log_vs_A.<ext>   - ln(frequency) vs A (with OLS line if slope.json present)
+  survival_SA.<ext>     - Survival S(A) = 1 - CDF(A)
+"""
 from __future__ import annotations
+import argparse, json, sys, pathlib
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")  # headless
+import matplotlib.pyplot as plt
 
-import argparse
-import logging
+
+def _ap():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--in", dest="inp")
+    ap.add_argument("--input", dest="inp")
+    ap.add_argument("-i", dest="inp")
+    ap.add_argument("--outdir", dest="outdir")
+    ap.add_argument("--output", dest="outdir")
+    ap.add_argument("-o", dest="outdir")
+    ap.add_argument("--slope", dest="slope")
+    ap.add_argument("--format", dest="fmt", default="png", choices=["png", "svg"])
+    ap.add_argument("--dpi", type=int, default=120)
+    return ap
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def _read_agg(p: str) -> pd.DataFrame:
+    df = pd.read_csv(p)
+    need = {"A", "count", "frequency"}
+    missing = need - set(df.columns)
+    if missing:
+        sys.exit(f"agg.csv missing columns: {sorted(missing)}")
+    df = df.sort_values("A").reset_index(drop=True)
+    df["frequency"] = df["frequency"].clip(lower=1e-12)
+    return df
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate diagnostic plots")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Run without creating any plots",
-    )
-    args = parser.parse_args(argv)
+def _maybe_read_slope(p: pathlib.Path | None):
+    if not p:
+        return None
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return None
 
-    if args.dry_run:
-        logger.info("Dry run: no action taken")
-        return 0
 
-    logger.info("Plot generation is not yet implemented")
+def _default_slope_path(agg_path: pathlib.Path) -> pathlib.Path:
+    return agg_path.with_name("slope.json")
+
+
+def _ln(x):
+    return np.log(np.asarray(x, dtype=float))
+
+
+def plot_freq_ln_vs_A(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int, slope: dict | None):
+    A = df["A"].to_numpy()
+    f = df["frequency"].to_numpy()
+    y = _ln(f)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.scatter(A, y, s=14)
+    ax.set_xlabel("Assembly index A")
+    ax.set_ylabel("ln frequency")
+    ax.set_title("ln(frequency) vs A (unguided)")
+
+    if slope and all(k in slope for k in ("m", "c")):
+        m = float(slope["m"])
+        c = float(slope["c"])
+        xs = np.linspace(A.min(), A.max(), 100)
+        ys = c + m * xs
+        ax.plot(xs, ys, linewidth=1.5)
+        ci = slope.get("ci95", None)
+        if ci and len(ci) == 2:
+            ax.text(0.01, 0.02,
+                    f"m={m:.3f}, 95% CI [{ci[0]:.3f}, {ci[1]:.3f}]",
+                    transform=ax.transAxes)
+        else:
+            ax.text(0.01, 0.02, f"m={m:.3f}", transform=ax.transAxes)
+
+    out = outdir / f"freq_log_vs_A.{fmt}"
+    fig.tight_layout()
+    fig.savefig(out, dpi=dpi)
+    plt.close(fig)
+
+
+def plot_survival(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int):
+    d = df.sort_values("A").copy()
+    d["cum"] = d["frequency"].cumsum()
+    d["S"] = 1.0 - d["cum"]
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.step(d["A"].to_numpy(), d["S"].to_numpy(), where="post")
+    ax.set_xlabel("Assembly index A")
+    ax.set_ylabel("Survival S(A) = 1 − CDF(A)")
+    ax.set_title("Survival function S(A)")
+    out = outdir / f"survival_SA.{fmt}"
+    fig.tight_layout()
+    fig.savefig(out, dpi=dpi)
+    plt.close(fig)
+
+
+def main():
+    ap = _ap()
+    args, unknown = ap.parse_known_args()
+    if unknown:
+        print("WARN plots.py: ignoring extra args:", " ".join(unknown), file=sys.stderr)
+
+    if not args.inp or not args.outdir:
+        ap.print_help()
+        sys.exit(2)
+
+    agg_path = pathlib.Path(args.inp)
+    outdir = pathlib.Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    df = _read_agg(str(agg_path))
+
+    slope = None
+    slope_path = pathlib.Path(args.slope) if args.slope else _default_slope_path(agg_path)
+    slope = _maybe_read_slope(slope_path)
+
+    plot_freq_ln_vs_A(df, outdir, args.fmt, args.dpi, slope)
+    plot_survival(df, outdir, args.fmt, args.dpi)
+
+    print(f"wrote: {outdir / ('freq_log_vs_A.' + args.fmt)}; {outdir / ('survival_SA.' + args.fmt)}")
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover - CLI entry point
+if __name__ == "__main__":
     raise SystemExit(main())
