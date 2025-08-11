@@ -57,3 +57,13 @@ def test_additive_guidance_monotone():
         probs.append(torch.softmax(new_logits, dim=-1)[0].item())
 
     assert probs[0] < probs[1] < probs[2]
+
+
+def test_linear_lambda_schedule_guardrail():
+    """Steps outside the valid range should be clamped."""
+
+    # Negative step clamps to 0
+    assert linear_lambda_schedule(-1, 3, 1.0) == 0.0
+
+    # Steps beyond the final diffusion step clamp to lambda_max
+    assert linear_lambda_schedule(5, 3, 1.0) == 1.0
