@@ -9,9 +9,7 @@ def test_run_log_contains_header(tmp_path):
     cfg = {"alpha": 1}
 
     # Ensure a clean logger even if another test initialised it
-    for handler in list(run_logger._RUN_LOGGER.handlers):
-        run_logger._RUN_LOGGER.removeHandler(handler)
-        handler.close()
+    run_logger.reset_run_logger()
 
     logger = run_logger.init_run_logger(
         str(log_file), grammar="G_MC", config=cfg, seed=42
@@ -33,7 +31,7 @@ def test_run_log_contains_header(tmp_path):
         "grammar",
         "config",
         "command",
-        "windows_version",
+        "os_version",
     ]:
         assert key in header
 
@@ -44,4 +42,4 @@ def test_run_log_contains_header(tmp_path):
     assert header["grammar"] == "G_MC"
     assert header["config"] == cfg
     assert header["command"]
-    assert header["windows_version"]
+    assert header["os_version"]

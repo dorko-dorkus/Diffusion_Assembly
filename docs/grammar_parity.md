@@ -19,7 +19,7 @@ When `ai.method=assemblymc`, the run logger captures additional
 information for reproducibility:
 
 - Commit hash of the local repository.
-- Windows/OS version.
+- Operating system version.
 - Full command line used to invoke the program.
 
 This metadata is emitted in the JSON header produced by

@@ -65,6 +65,22 @@ def _set_seeds(seed: int) -> Dict[str, int]:
     return seeds
 
 
+def reset_run_logger() -> None:
+    """Remove all handlers from the module logger.
+
+    This is primarily intended for use in tests where a fresh logger is
+    required.  It closes any existing handlers to release open file
+    descriptors.
+    """
+
+    for handler in list(_RUN_LOGGER.handlers):
+        _RUN_LOGGER.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+
 def init_run_logger(
     log_path: str,
     grammar: str,
@@ -88,7 +104,7 @@ def init_run_logger(
         "seeds": seeds,
         "packages": _package_versions(),
         "git_hash": _git_hash(),
-        "windows_version": platform.platform(),
+        "os_version": platform.platform(),
         "command": " ".join(sys.argv),
         "grammar": grammar,
         "config": config,
@@ -105,4 +121,4 @@ def init_run_logger(
     return _RUN_LOGGER
 
 
-__all__ = ["init_run_logger"]
+__all__ = ["init_run_logger", "reset_run_logger"]
