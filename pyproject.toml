@@ -7,6 +7,16 @@ name = "assembly_diffusion"
 version = "0.1.0"
 description = "Prototype package for molecular assembly diffusion"
 requires-python = ">=3.8"
+dependencies = [
+    "torch",
+    "pyyaml",
+    "numpy",
+    "pandas",
+    "scipy",
+    "statsmodels",
+    "rdkit==2024.9.6",
+    "networkx",
+]
 
 [project.scripts]
 assembly-diffusion = "assembly_diffusion.cli:main"
