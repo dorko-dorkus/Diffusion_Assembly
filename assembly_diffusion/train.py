@@ -23,8 +23,14 @@ validation: data can be partitioned into train/validation/test splits for model
 import os
 import random
 import time
+from pathlib import Path
 from typing import Union
+import platform
+import subprocess
+import sys
 
+import importlib.metadata as importlib_metadata
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, random_split
 
@@ -39,6 +45,39 @@ from .logging_config import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def setup_reproducibility(seed: int) -> None:
+    """Seed RNGs and log environment details for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    logger.info("Random seed set to %d", seed)
+
+    logger.info(
+        "Python %s on %s", sys.version.replace("\n", " "), platform.platform()
+    )
+    logger.info("PyTorch %s CUDA=%s", torch.__version__, torch.cuda.is_available())
+    try:
+        packages = sorted(
+            f"{d.metadata['Name']}=={d.version}"
+            for d in importlib_metadata.distributions()
+        )
+        logger.info("Package versions:\n%s", "\n".join(packages))
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Failed to list package versions: %s", exc)
+
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+        ).strip()
+        logger.info("Git commit SHA: %s", commit)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Failed to obtain git commit SHA: %s", exc)
 
 
 def teacher_edit(x0: MoleculeGraph, xt: MoleculeGraph) -> Union[str, tuple[int, int, int]]:
@@ -368,6 +407,8 @@ def train_model(
     consecutive epochs.  The returned dictionary contains metrics for the
     train, validation and test loaders alongside the validation loss history.
     """
+
+    setup_reproducibility(seed)
 
     train_set, val_set, test_set = split_dataset(
         dataset,
