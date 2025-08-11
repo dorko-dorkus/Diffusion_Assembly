@@ -52,6 +52,14 @@ def test_ks_test():
     assert 0 <= res["pvalue"] <= 1
 
 
+def test_ks_test_baseline_identical():
+    """Control run where both samples are identical."""
+
+    res = ks_test([1, 2, 3], [1, 2, 3])
+    assert res["statistic"] == pytest.approx(0.0)
+    assert res["pvalue"] == pytest.approx(1.0)
+
+
 def test_scaffold_diversity():
     rdkit = pytest.importorskip("rdkit")
     smiles = ["c1ccccc1", "c1ccncc1"]  # benzene vs. pyridine
