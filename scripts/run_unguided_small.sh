@@ -40,10 +40,10 @@ YAML
 
 # --- Pipeline ---------------------------------------------------------------
 echo ">>> Sampling ${N} molecules"
-python scripts/sample.py --n "$N" --out "$RUN_DIR/samples.parquet" | tee "$RUN_DIR/sample.log"
+python scripts/sample.py --n "$N" --out "$RUN_DIR/samples.csv" | tee "$RUN_DIR/sample.log"
 
 echo ">>> Computing A* via AssemblyMC (trials=$TRIALS, timeout_s=$TIMEOUT_S)"
-python scripts/compute_ai.py --in "$RUN_DIR/samples.parquet" --out "$RUN_DIR/ai.csv" \
+python scripts/compute_ai.py --in "$RUN_DIR/samples.csv" --out "$RUN_DIR/ai.csv" \
   --method assemblymc --trials "$TRIALS" --timeout-s "$TIMEOUT_S" | tee "$RUN_DIR/ai.log"
 
 echo ">>> Aggregating metrics"
