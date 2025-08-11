@@ -19,9 +19,31 @@ validation: experiments rely on an 80/10/10 train/validation/test split with
     and unit tests verify experiment setup.
 """
 
-from .cli import main
+import argparse
+
+from .cli import main as cli_main
 from .repro import setup_reproducibility
 
-if __name__ == "__main__":
+
+def run_baseline() -> None:
+    """Execute a simple unguided sampling run as a control baseline."""
+
+    cli_main(["sample"])
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Assembly Diffusion wrapper")
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Run an additional unguided baseline sample before executing the requested command.",
+    )
+    args, rest = parser.parse_known_args()
     setup_reproducibility(0)
+    if args.baseline:
+        run_baseline()
+    cli_main(rest)
+
+
+if __name__ == "__main__":
     main()
