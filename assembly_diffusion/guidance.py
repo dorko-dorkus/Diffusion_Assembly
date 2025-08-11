@@ -116,10 +116,19 @@ def additive_guidance(logits: Tensor, A_hat: Tensor, lam: float) -> Tensor:
 
 
 def linear_lambda_schedule(step: int, total_steps: int, lambda_max: float) -> float:
-    """Linearly ramp ``λ`` from ``0`` to ``lambda_max`` over diffusion steps."""
+    """Linearly ramp ``λ`` from ``0`` to ``lambda_max`` over diffusion steps.
+
+    The ``step`` value is clamped to ``[0, total_steps - 1]`` to provide a
+    simple guardrail against out-of-range inputs.
+    """
 
     if total_steps <= 1:
         return float(lambda_max)
+
+    # Clamp step to the valid range. This ensures callers that accidentally
+    # provide a step outside ``[0, total_steps - 1]`` receive a sensible value
+    # rather than extrapolating beyond the intended schedule.
+    step = max(0, min(step, total_steps - 1))
     return float(lambda_max) * step / (total_steps - 1)
 
 
