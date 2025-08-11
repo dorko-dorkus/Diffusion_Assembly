@@ -222,6 +222,78 @@ def error_quantiles(
     return {float(q): float(v) for q, v in zip(quantiles, qs)}
 
 
+def baseline_slope_fit(
+    A: Sequence[int],
+    *,
+    trim_quant: float = 0.05,
+    alpha: float = 0.05,
+    n_boot: int = 1000,
+    random_state: int | None = None,
+    save_bootstrap: str | None = None,
+) -> Dict[str, float]:
+    """Fit a log-frequency vs. ``A`` slope with optional bootstrapping.
+
+    ``A`` represents assembly sizes of an unguided baseline.  The distribution
+    is summarised by counting occurrences of each ``A`` value and fitting
+    ``log(freq)`` to ``m*A + c`` via ordinary least squares.  Only the central
+    90% of ``A`` values are used by trimming ``trim_quant`` from both tails.
+
+    A bootstrap distribution of the slope ``m`` is computed and optionally
+    stored to ``save_bootstrap`` using :func:`numpy.save`.  The function returns
+    the point estimate ``m`` and a ``(1-α)`` confidence interval from the
+    bootstrap distribution.
+
+    Parameters
+    ----------
+    A:
+        Sequence of assembly indices.  At least 5000 samples are required.
+    trim_quant:
+        Fraction of values to trim from each tail when fitting.
+    alpha:
+        Significance level for the bootstrap confidence interval.
+    n_boot:
+        Number of bootstrap resamples.
+    random_state:
+        Optional seed for the bootstrap RNG.
+    save_bootstrap:
+        Optional path to save the bootstrap slope array via ``numpy.save``.
+    """
+
+    A_arr = np.asarray(A, dtype=int)
+    if A_arr.size < 5000:
+        raise ValueError("At least 5000 samples required for baseline slope fit")
+
+    df = pd.DataFrame({"A": A_arr})
+    grouped = df.groupby("A").size().reset_index(name="freq").sort_values("A")
+    lo, hi = grouped["A"].quantile([trim_quant, 1 - trim_quant])
+    mask = (grouped["A"] >= lo) & (grouped["A"] <= hi)
+    trimmed = grouped[mask]
+    X = trimmed["A"].to_numpy(dtype=float)
+    y = np.log(trimmed["freq"].to_numpy(dtype=float))
+    design = np.vstack([X, np.ones_like(X)]).T
+    m, c = np.linalg.lstsq(design, y, rcond=None)[0]
+
+    rng = np.random.default_rng(random_state)
+    boots = np.empty(n_boot, dtype=float)
+    for i in range(n_boot):
+        resample = rng.choice(A_arr, size=A_arr.size, replace=True)
+        res_df = pd.DataFrame({"A": resample})
+        res_grouped = res_df.groupby("A").size().reset_index(name="freq").sort_values("A")
+        lo_r, hi_r = res_grouped["A"].quantile([trim_quant, 1 - trim_quant])
+        mask_r = (res_grouped["A"] >= lo_r) & (res_grouped["A"] <= hi_r)
+        trimmed_r = res_grouped[mask_r]
+        X_r = trimmed_r["A"].to_numpy(dtype=float)
+        y_r = np.log(trimmed_r["freq"].to_numpy(dtype=float))
+        design_r = np.vstack([X_r, np.ones_like(X_r)]).T
+        boots[i] = np.linalg.lstsq(design_r, y_r, rcond=None)[0][0]
+
+    if save_bootstrap is not None:
+        np.save(save_bootstrap, boots)
+
+    ci_lo, ci_hi = np.quantile(boots, [alpha / 2, 1 - alpha / 2])
+    return {"m": float(m), "c": float(c), "ci_lo": float(ci_lo), "ci_hi": float(ci_hi)}
+
+
 def mean_difference(sample: Sequence[float], control: Sequence[float]) -> float:
     """Return the mean difference ``mean(sample) - mean(control)``.
 
