@@ -56,6 +56,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Run evaluation metrics smoke test")
     parser.add_argument("--print-metrics", action="store_true", help="Print metrics dictionary")
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also compute metrics for a trivial single-carbon baseline",
+    )
     args = parser.parse_args()
 
     random.seed(0)
@@ -99,6 +104,9 @@ def main() -> None:
         "val": evaluate(val_smiles),
         "test": evaluate(test_smiles),
     }
+
+    if args.baseline:
+        metrics["baseline"] = evaluate("C")
 
     if args.print_metrics:
         logger.info(metrics)

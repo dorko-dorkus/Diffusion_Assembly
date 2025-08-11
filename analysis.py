@@ -222,6 +222,17 @@ def error_quantiles(
     return {float(q): float(v) for q, v in zip(quantiles, qs)}
 
 
+def mean_difference(sample: Sequence[float], control: Sequence[float]) -> float:
+    """Return the mean difference ``mean(sample) - mean(control)``.
+
+    This helper provides a minimal baseline comparison between a treatment
+    sample and a control group.  Positive values indicate that the sample has a
+    higher average than the control baseline.
+    """
+
+    return float(np.mean(sample) - np.mean(control))
+
+
 def train_val_test_split(
     data: Sequence,
     train_size: float = 0.8,
@@ -285,6 +296,7 @@ __all__ = [
     "sensitivity_over_lambda",
     "calibration_curve",
     "error_quantiles",
+    "mean_difference",
     "train_val_test_split",
     "early_stopping",
 ]

@@ -97,6 +97,10 @@ if __name__ == "__main__":
         "--name", required=True, help="Experiment name key in configs/registry.yaml"
     )
     p.add_argument("--outdir", default="results", help="Base results dir")
+    p.add_argument(
+        "--baseline",
+        help="Optional baseline experiment key to run for comparison",
+    )
     args = p.parse_args()
 
     registry = yaml.safe_load(open("configs/registry.yaml"))
@@ -121,3 +125,29 @@ if __name__ == "__main__":
 
     _manifest(outdir, cfg, extra={"run_id": run_id, "requires_confirmation": flags})
     logger.info("[OK] Wrote manifest and artifacts to %s", outdir)
+
+    if args.baseline:
+        assert (
+            args.baseline in registry["experiments"]
+        ), f"Unknown baseline {args.baseline}"
+        bcfg = registry["experiments"][args.baseline]
+        b_run_id = f"{args.baseline}_{int(time.time())}"
+        b_outdir = os.path.join(args.outdir, b_run_id)
+        os.makedirs(b_outdir, exist_ok=True)
+
+        random.seed(bcfg["seed"])
+        np.random.seed(bcfg["seed"])
+        if torch is not None:
+            torch.manual_seed(bcfg["seed"])
+            if hasattr(torch, "use_deterministic_algorithms"):
+                torch.use_deterministic_algorithms(True)
+
+        b_metrics, b_flags = run_pipeline(bcfg, b_outdir)
+        write_metrics(b_outdir, seed=int(bcfg["seed"]), config=bcfg, **b_metrics)
+
+        _manifest(
+            b_outdir,
+            bcfg,
+            extra={"run_id": b_run_id, "requires_confirmation": b_flags},
+        )
+        logger.info("[OK] Wrote baseline manifest and artifacts to %s", b_outdir)
