@@ -86,6 +86,7 @@ def init_run_logger(
     grammar: str,
     config: dict,
     seed: Optional[int] = None,
+    grammar_text: Optional[str] = None,
 ) -> logging.Logger:
     """Initialise a file logger that writes a JSON header.
 
@@ -107,6 +108,7 @@ def init_run_logger(
         "os_version": platform.platform(),
         "command": " ".join(sys.argv),
         "grammar": grammar,
+        "grammar_text": grammar_text,
         "config": config,
     }
     with open(log_path, "w", encoding="utf-8") as fh:

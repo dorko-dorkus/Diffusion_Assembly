@@ -21,6 +21,9 @@ import sys
 import numpy as np
 import pandas as pd
 
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+from assembly_diffusion.run_logger import init_run_logger
+
 
 def _arg_parser() -> argparse.ArgumentParser:
     """Create an argument parser accepting several flag synonyms."""
@@ -34,6 +37,8 @@ def _arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("-o", dest="out")
     ap.add_argument("--universe", default="M")
     ap.add_argument("--grammar", default=None)
+    ap.add_argument("--log", dest="log", default=None)
+    ap.add_argument("--grammar-text", dest="grammar_text", default=None)
     return ap
 
 
@@ -109,6 +114,15 @@ def main() -> int:
         proto["smiles_count"] = 1
     proto["frequency"] = proto["smiles_count"] / total
     grammar = args.grammar or ("G_MC" if (df["method"] == "assemblymc").any() else "G")
+
+    run_log = None
+    if args.log:
+        run_log = init_run_logger(
+            args.log,
+            grammar=grammar,
+            config={"input": args.inp, "output": args.out, "universe": args.universe},
+            grammar_text=args.grammar_text,
+        )
     proto_out = out.with_name("protocol_objects.csv")
     cols = ["id", "smiles", "As_lower", "As_upper", "validity", "frequency", "d_min"]
     for c in cols:
@@ -119,13 +133,15 @@ def main() -> int:
     proto.insert(2, "grammar", grammar)
     proto.to_csv(proto_out, index=False)
 
-    print(
+    msg = (
         f"bins={len(g)} total={int(total)} "
         f"wrote_agg={out} wrote_protocol={proto_out}"
     )
+    if run_log:
+        run_log.info(msg)
+    print(msg)
     return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
     raise SystemExit(main())
-
