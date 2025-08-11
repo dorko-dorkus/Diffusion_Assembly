@@ -7,3 +7,4 @@ statsmodels
 rdkit==2024.9.6
 
 networkx
+matplotlib
