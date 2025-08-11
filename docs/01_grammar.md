@@ -23,6 +23,17 @@ Each rule adds at most one bond, aligning with the assembly-theory intuition of
 `FeasibilityMask` (`assembly_diffusion/mask.py`), which performs valence checks
 and optional RDKit sanitization.
 
+## Grammar G′
+`G′` extends `G` with an additional production rule that relabels existing
+atoms:
+
+4. **Atom substitution** `("SUB", i, a)` replaces the atom at index `i` with a
+   new element `a ∈ {C,N,O,H}` while preserving existing bonds.
+
+The remainder of the state space, start state and feasibility checks mirror the
+original grammar.  This variant explores the impact of allowing atom relabeling
+in the assembly process.
+
 ### Acyclic exactness
 For molecules whose bond graph is a tree, the exact assembly index
 `A*(x|G,P)` equals the number of edges because each step contributes a single
