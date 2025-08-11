@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 import torch
 
-from .config import SamplingConfig
+from .config import SamplingConfig, load_run_config
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -100,8 +100,24 @@ def sample_demo(args):
         logger.warning("RDKit not installed; skipping SMILES output")
 
 
+def build_ai(method: str):
+    """Instantiate the configured assembly index estimator."""
+
+    if method == "surrogate":
+        from .ai_surrogate import AISurrogate
+
+        return AISurrogate()
+    if method == "assemblymc":
+        from .ai_mc import AssemblyMC
+
+        return AssemblyMC()
+    raise ValueError(f"Unknown ai.method '{method}'")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Assembly Diffusion command line interface")
+    parser.add_argument("--config", type=str, help="Path to run configuration file")
+    parser.add_argument("--dry-run", action="store_true", help="Print parsed configuration and exit")
     sub = parser.add_subparsers(dest="command")
     sample_parser = sub.add_parser("sample", help="Run a simple sampling demo")
     sample_parser.add_argument("--gamma", type=float, default=None, help="Guidance strength; overrides config if set")
@@ -115,10 +131,23 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
+    cfg = None
+    if args.config:
+        cfg = load_run_config(args.config)
+        if args.dry_run:
+            print(cfg)
+            return
+        # Instantiate AI to exercise config selection
+        build_ai(cfg.ai.method)
+
     if args.command == "sample":
         sample_demo(args)
     else:
-        parser.print_help()
+        if args.config and not args.dry_run:
+            # Config was supplied but no command; show parsed config
+            print(cfg)
+        else:
+            parser.print_help()
 
 
 if __name__ == "__main__":
