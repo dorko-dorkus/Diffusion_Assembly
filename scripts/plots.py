@@ -13,14 +13,18 @@ Inputs:
 Outputs (in --outdir):
   freq_log_vs_A.<ext>   - ln(frequency) vs A (with OLS line if slope.json present)
   survival_SA.<ext>     - Survival S(A) = 1 - CDF(A)
+  freq_vs_A.<ext>       - frequency vs A (linear scale)
+  cdf_A.<ext>           - cumulative distribution F(A)
+  report.{html,pdf,json} - lightweight HTML/PDF report with provenance JSON
 """
 from __future__ import annotations
-import argparse, json, sys, pathlib
+import argparse, json, sys, pathlib, os
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # headless
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 def _ap():
@@ -67,7 +71,14 @@ def _ln(x):
     return np.log(np.asarray(x, dtype=float))
 
 
-def plot_freq_ln_vs_A(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int, slope: dict | None):
+def plot_freq_ln_vs_A(
+    df: pd.DataFrame,
+    outdir: pathlib.Path,
+    fmt: str,
+    dpi: int,
+    slope: dict | None,
+    pdf: PdfPages | None = None,
+):
     A = df["A"].to_numpy()
     f = df["frequency"].to_numpy()
     y = _ln(f)
@@ -96,10 +107,19 @@ def plot_freq_ln_vs_A(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int
     out = outdir / f"freq_log_vs_A.{fmt}"
     fig.tight_layout()
     fig.savefig(out, dpi=dpi)
+    if pdf:
+        pdf.savefig(fig)
     plt.close(fig)
+    return out
 
 
-def plot_survival(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int):
+def plot_survival(
+    df: pd.DataFrame,
+    outdir: pathlib.Path,
+    fmt: str,
+    dpi: int,
+    pdf: PdfPages | None = None,
+):
     d = df.sort_values("A").copy()
     d["cum"] = d["frequency"].cumsum()
     d["S"] = 1.0 - d["cum"]
@@ -112,7 +132,60 @@ def plot_survival(df: pd.DataFrame, outdir: pathlib.Path, fmt: str, dpi: int):
     out = outdir / f"survival_SA.{fmt}"
     fig.tight_layout()
     fig.savefig(out, dpi=dpi)
+    if pdf:
+        pdf.savefig(fig)
     plt.close(fig)
+    return out
+
+
+def plot_freq_vs_A(
+    df: pd.DataFrame,
+    outdir: pathlib.Path,
+    fmt: str,
+    dpi: int,
+    pdf: PdfPages | None = None,
+):
+    """Plot frequency vs A on a linear scale."""
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.bar(df["A"].to_numpy(), df["frequency"].to_numpy(), width=0.8)
+    ax.set_xlabel("Assembly index A")
+    ax.set_ylabel("frequency")
+    ax.set_title("frequency vs A")
+    out = outdir / f"freq_vs_A.{fmt}"
+    fig.tight_layout()
+    fig.savefig(out, dpi=dpi)
+    if pdf:
+        pdf.savefig(fig)
+    plt.close(fig)
+    return out
+
+
+def plot_cdf(
+    df: pd.DataFrame,
+    outdir: pathlib.Path,
+    fmt: str,
+    dpi: int,
+    pdf: PdfPages | None = None,
+):
+    """Plot cumulative distribution F(A)."""
+
+    d = df.sort_values("A").copy()
+    d["F"] = d["frequency"].cumsum()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.step(d["A"].to_numpy(), d["F"].to_numpy(), where="post")
+    ax.set_xlabel("Assembly index A")
+    ax.set_ylabel("CDF F(A)")
+    ax.set_title("Cumulative distribution F(A)")
+    out = outdir / f"cdf_A.{fmt}"
+    fig.tight_layout()
+    fig.savefig(out, dpi=dpi)
+    if pdf:
+        pdf.savefig(fig)
+    plt.close(fig)
+    return out
 
 
 def main():
@@ -131,14 +204,41 @@ def main():
 
     df = _read_agg(str(agg_path))
 
-    slope = None
     slope_path = pathlib.Path(args.slope) if args.slope else _default_slope_path(agg_path)
     slope = _maybe_read_slope(slope_path)
 
-    plot_freq_ln_vs_A(df, outdir, args.fmt, args.dpi, slope)
-    plot_survival(df, outdir, args.fmt, args.dpi)
+    pdf_path = outdir / "report.pdf"
+    paths = []
+    with PdfPages(pdf_path) as pdf:
+        paths.append(plot_freq_ln_vs_A(df, outdir, args.fmt, args.dpi, slope, pdf))
+        paths.append(plot_survival(df, outdir, args.fmt, args.dpi, pdf))
+        paths.append(plot_freq_vs_A(df, outdir, args.fmt, args.dpi, pdf))
+        paths.append(plot_cdf(df, outdir, args.fmt, args.dpi, pdf))
 
-    print(f"wrote: {outdir / ('freq_log_vs_A.' + args.fmt)}; {outdir / ('survival_SA.' + args.fmt)}")
+    html_path = outdir / "report.html"
+    html_lines = ["<html><body>"]
+    for p in paths:
+        html_lines.append(f'<img src="{p.name}" alt="{p.name}"><br>')
+    html_lines.append("</body></html>")
+    html_path.write_text("\n".join(html_lines))
+
+    bin_path = os.environ.get("ASSEMBLYMC_BIN", "AssemblyMC.exe")
+    bin_name = os.path.basename(bin_path)
+    trials = os.environ.get("TRIALS", "?")
+    commit = os.environ.get("ASSEMBLYMC_COMMIT", "unknown")
+    provenance = {
+        "assemblymc": {
+            "commit": commit,
+            "cmd": f"{bin_name} --trials {trials}",
+            "bin": bin_name,
+        }
+    }
+    json_path = outdir / "report.json"
+    json_path.write_text(json.dumps(provenance, indent=2))
+
+    msg = [str(p) for p in paths]
+    msg.extend([str(html_path), str(pdf_path), str(json_path)])
+    print("wrote: " + "; ".join(msg))
     return 0
 
 
