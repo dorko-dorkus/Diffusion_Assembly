@@ -1,0 +1,6 @@
+tag,type,description
+B-101,Boiler,Package boiler supplying steam
+HX-100,HeatExchanger,Target heat exchanger
+CT-101,Tank,Condensate collection tank
+PT-101,PressureTransmitter,Steam pressure transmitter near HX-100
+AC-101,AirCompressor,Instrument air source
