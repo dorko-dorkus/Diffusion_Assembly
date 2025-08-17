@@ -10,7 +10,7 @@ valves, drains and verification instrumentation (PT/TT) using hop count as the
 primary metric and ``health_score`` as a tie breaker.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Sequence
 
 import networkx as nx
@@ -20,12 +20,17 @@ __all__ = ["IsolationPlan", "plan_isolation"]
 
 @dataclass
 class IsolationPlan:
-    """Container for the isolation points returned by :func:`plan_isolation`."""
+    """Container for the isolation points returned by :func:`plan_isolation`.
+
+    ``notes`` records the rationale behind selections.  The content is free
+    form and intended for human consumption in the tests only.
+    """
 
     blocks: List[str]
     bleed: str
     drain: str
     verify: str
+    notes: List[str] = field(default_factory=list)
 
 
 def _choose(
@@ -75,9 +80,14 @@ def plan_isolation(g: nx.MultiDiGraph, asset: str) -> IsolationPlan:
     undirected = g.to_undirected()
     distances = nx.single_source_shortest_path_length(undirected, asset)
 
+    notes: List[str] = []
+
     blocks = _choose(g, distances, ["block", "valve"], 2)
     if len(blocks) != 2:
         raise ValueError("expected at least two block valves")
+    notes.append(
+        f"selected blocks {blocks} preferring lockable and healthy devices"
+    )
 
     # Expand blocks to include any bypass group members that lie on the
     # connecting paths.  If the path between the asset and a selected block
@@ -95,24 +105,46 @@ def plan_isolation(g: nx.MultiDiGraph, asset: str) -> IsolationPlan:
                 if group:
                     groups.add(group)
         for group in groups:
+            members: List[str] = []
             for u, v, attrs in g.edges(data=True):
                 if attrs.get("bypass_group") == group:
                     if u not in blocks and u not in bypass_blocks:
                         bypass_blocks.append(u)
+                        members.append(u)
                     if v not in blocks and v not in bypass_blocks:
                         bypass_blocks.append(v)
+                        members.append(v)
+            if members:
+                notes.append(
+                    f"included bypass group {group} members {sorted(members)}"
+                )
     blocks.extend(bypass_blocks)
 
     bleeds = _choose(g, distances, ["bleed", "vent"], 1)
     if not bleeds:
         raise ValueError("expected a bleed valve")
+    notes.append(
+        f"selected bleed {bleeds[0]} preferring lockable and healthy devices"
+    )
 
     drains = _choose(g, distances, ["drain"], 1)
     if not drains:
         raise ValueError("expected a drain")
+    notes.append(
+        f"selected drain {drains[0]} preferring lockable and healthy devices"
+    )
 
     verifies = _choose(g, distances, ["PT", "TT"], 1)
     if not verifies:
         raise ValueError("expected a PT or TT for verification")
+    notes.append(
+        f"selected verify {verifies[0]} preferring lockable and healthy devices"
+    )
 
-    return IsolationPlan(blocks=blocks, bleed=bleeds[0], drain=drains[0], verify=verifies[0])
+    return IsolationPlan(
+        blocks=blocks,
+        bleed=bleeds[0],
+        drain=drains[0],
+        verify=verifies[0],
+        notes=notes,
+    )

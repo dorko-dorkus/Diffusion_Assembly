@@ -30,3 +30,7 @@ def test_bypass_and_lockable_preference():
     assert plan.bleed == "L2"
     assert plan.drain == "D1"
     assert plan.verify == "PT1"
+    # Notes document bypass handling and heuristic preferences
+    joined = " ".join(plan.notes)
+    assert "bypass group BG1" in joined
+    assert "lockable" in joined
