@@ -6,6 +6,9 @@ import math
 import numpy as np
 
 
+Sampler = Callable[[np.random.Generator], float]
+
+
 @dataclass(frozen=True)
 class Triangular:
     """Triangular distribution with parameters ``a`` ≤ ``m`` ≤ ``b``."""
@@ -44,14 +47,22 @@ class Lognormal:
 
 
 # Base sampler definitions used by :func:`make_sampler`.
-_BASE_SAMPLERS: Mapping[str, Callable[[], object]] = {
+BaseDist = Triangular | Lognormal
+_BASE_SAMPLERS: Mapping[str, Callable[[], BaseDist]] = {
     "triangular": lambda: Triangular(1.0, 2.0, 4.0),
     "lognormal": lambda: Lognormal(0.0, 0.5),
 }
 
 
-def make_sampler(class_id: str, context: Mapping[str, float]) -> Callable[[np.random.Generator], float]:
-    """Factory returning a sampler adjusted for ``context``.
+def make_sampler(class_id: str, context: Mapping[str, float]) -> BaseDist:
+    """Return a sampler with parameters tuned for a given ``context``.
+
+    ``context`` values act as multiplicative speed modifiers: a higher score
+    implies shorter expected durations.  The three scores are combined as
+    ``1 / (health * access * experience)`` which scales the base sampler's
+    parameters.  For a :class:`Triangular` this multiplies ``a``, ``m`` and
+    ``b``; for a :class:`Lognormal` the scale is applied via the mean of the
+    underlying normal distribution.
 
     Parameters
     ----------
