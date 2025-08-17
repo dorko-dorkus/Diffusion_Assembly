@@ -1,0 +1,4 @@
+tag,line_tag,type,bypass_group
+VLV-100,ST-001,block,BG-1
+VLV-101,ST-001-BP,block,BG-1
+VLV-102,ST-001-BP,control,BG-1

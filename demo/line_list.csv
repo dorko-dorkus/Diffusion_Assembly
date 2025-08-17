@@ -1,0 +1,6 @@
+tag,from_tag,to_tag,service,direction,description
+ST-001,B-101,HX-100,Steam,supply,Steam supply to HX-100
+ST-001-BP,B-101,HX-100,Steam,supply,Bypass around HX-100
+ST-001-PT,HX-100,PT-101,Steam,supply,Connection to pressure transmitter
+CD-001,HX-100,CT-101,Condensate,return,Condensate return to tank
+IA-001,AC-101,HX-100,InstrumentAir,supply,Instrument air to valves
