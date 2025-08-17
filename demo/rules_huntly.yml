@@ -1,0 +1,18 @@
+# Basic isolation and residual pressure thresholds for Huntly demo site.
+# Each section documents the default valve arrangement.
+steam:
+  isolation: DDBB    # Double block and bleed isolation for steam mains.
+  bleed: true        # Bleed valve remains open to vent trapped steam.
+
+condensate:
+  isolation: single  # Single block adequate on condensate return lines.
+  drain: true        # Drain valve ensures line can be emptied.
+
+instrument_air:
+  supply: block      # Block supply to stop backfeed during maintenance.
+
+# kPa residual pressure thresholds considered safe after isolation.
+residual_pressure:
+  steam: 7           # Steam lines should be below 7 kPa.
+  condensate: 3      # Condensate headers safe below 3 kPa.
+  instrument_air: 1  # Instrument air must drop below 1 kPa.
