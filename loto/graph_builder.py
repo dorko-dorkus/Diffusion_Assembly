@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import csv
 from typing import Dict, List, Optional
+
+import networkx as nx
 
 __all__ = [
     "GraphError",
@@ -9,6 +13,7 @@ __all__ = [
     "Node",
     "Edge",
     "Graph",
+    "from_csvs",
     "validate",
 ]
 
@@ -55,6 +60,103 @@ class Graph:
 
     nodes: Dict[str, Node]
     edges: List[Edge]
+
+
+def from_csvs(node_csv: Path | str, edge_csv: Path | str) -> Dict[str, nx.MultiDiGraph]:
+    """Construct graphs for each domain from node and edge CSV files.
+
+    Parameters
+    ----------
+    node_csv:
+        Path to a CSV containing node definitions. Required columns are
+        ``tag``, ``type``, ``domain``, ``fail_state`` and ``health_score``.
+    edge_csv:
+        Path to a CSV containing edge definitions. Required columns are
+        ``from_tag``, ``to_tag``, ``is_isolation_point``, ``iso_tag``,
+        ``direction``, ``size_mm`` and ``bypass_group``.
+
+    Returns
+    -------
+    dict[str, nx.MultiDiGraph]
+        A mapping of domain name to graph constructed for that domain.
+
+    Notes
+    -----
+    - Leading and trailing whitespace is trimmed from all fields.
+    - Boolean flags are interpreted case-insensitively.
+    - Duplicate node ``tag`` values raise :class:`GraphError`.
+    """
+
+    def _strip(val: Optional[str]) -> str:
+        return val.strip() if val is not None else ""
+
+    def _to_bool(val: str) -> bool:
+        return _strip(val).lower() in {"1", "true", "yes", "y"}
+
+    node_path = Path(node_csv)
+    edge_path = Path(edge_csv)
+
+    graphs: Dict[str, nx.MultiDiGraph] = {}
+    nodes_by_tag: Dict[str, Dict[str, object]] = {}
+
+    with node_path.open(newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    rows.sort(key=lambda r: _strip(r.get("tag", "")))
+    for row in rows:
+        tag = _strip(row.get("tag"))
+        if not tag:
+            continue
+        if tag in nodes_by_tag:
+            raise GraphError(f"duplicate node tag: {tag}")
+        domain = _strip(row.get("domain")) or None
+        node_attrs = {
+            "type": _strip(row.get("type")) or None,
+            "domain": domain,
+            "tag": tag,
+            "fail_state": _strip(row.get("fail_state")) or None,
+            "health_score": float(_strip(row.get("health_score")))
+            if _strip(row.get("health_score"))
+            else None,
+        }
+        nodes_by_tag[tag] = node_attrs
+        g = graphs.setdefault(domain or "", nx.MultiDiGraph())
+        g.add_node(tag, **node_attrs)
+
+    with edge_path.open(newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    rows.sort(
+        key=lambda r: (
+            _strip(r.get("from_tag", "")),
+            _strip(r.get("to_tag", "")),
+            _strip(r.get("iso_tag", "")),
+        )
+    )
+    for row in rows:
+        src = _strip(row.get("from_tag"))
+        dst = _strip(row.get("to_tag"))
+        if not src or not dst:
+            continue
+        if src not in nodes_by_tag or dst not in nodes_by_tag:
+            raise GraphError(f"edge references unknown node {src}->{dst}")
+        src_dom = nodes_by_tag[src]["domain"]
+        dst_dom = nodes_by_tag[dst]["domain"]
+        if src_dom != dst_dom:
+            raise GraphError(f"edge crosses domains {src_dom}->{dst_dom}")
+        g = graphs.setdefault(src_dom or "", nx.MultiDiGraph())
+        edge_attrs = {
+            "is_isolation_point": _to_bool(row.get("is_isolation_point", "")),
+            "iso_tag": _strip(row.get("iso_tag")) or None,
+            "direction": _strip(row.get("direction")) or None,
+            "size_mm": float(_strip(row.get("size_mm")))
+            if _strip(row.get("size_mm"))
+            else None,
+            "bypass_group": _strip(row.get("bypass_group")) or None,
+        }
+        g.add_edge(src, dst, **edge_attrs)
+
+    return graphs
 
 
 def validate(graphs: List[Graph]) -> List[Issue]:
