@@ -34,28 +34,24 @@ def _choose(
     types: Sequence[str],
     count: int,
 ) -> List[str]:
-    """Return ``count`` nodes of ``types`` sorted by distance then health.
+    """Return ``count`` nodes of ``types`` sorted by distance then heuristics.
 
-    Parameters
-    ----------
-    g:
-        Graph to inspect.
-    distances:
-        Mapping of node id to hop count from the asset.
-    types:
-        Acceptable node ``type`` values.
-    count:
-        Number of nodes to return.
+    Candidates are sorted by:
+
+    1. hop count from the asset
+    2. whether the device is ``lockable`` (``True`` preferred)
+    3. ``health_score`` (higher preferred)
     """
 
-    candidates: List[tuple[int, float, str]] = []
+    candidates: List[tuple[int, int, float, str]] = []
     for node, attrs in g.nodes(data=True):
         if attrs.get("type") in types and node in distances:
             dist = distances[node]
+            lockable = bool(attrs.get("lockable"))
             health = attrs.get("health_score", 0.0) or 0.0
-            candidates.append((dist, -health, node))
+            candidates.append((dist, int(not lockable), -health, node))
     candidates.sort()
-    return [n for _, _, n in candidates[:count]]
+    return [n for _, _, _, n in candidates[:count]]
 
 
 def plan_isolation(g: nx.MultiDiGraph, asset: str) -> IsolationPlan:
@@ -82,6 +78,30 @@ def plan_isolation(g: nx.MultiDiGraph, asset: str) -> IsolationPlan:
     blocks = _choose(g, distances, ["block", "valve"], 2)
     if len(blocks) != 2:
         raise ValueError("expected at least two block valves")
+
+    # Expand blocks to include any bypass group members that lie on the
+    # connecting paths.  If the path between the asset and a selected block
+    # traverses an edge with ``bypass_group`` then all nodes connected by edges
+    # of that group are added to the block list.
+    bypass_blocks: List[str] = []
+    for blk in list(blocks):
+        path = nx.shortest_path(undirected, asset, blk)
+        groups: set[str] = set()
+        for u, v in zip(path, path[1:]):
+            data_uv = g.get_edge_data(u, v, default={})
+            data_vu = g.get_edge_data(v, u, default={})
+            for edge_data in list(data_uv.values()) + list(data_vu.values()):
+                group = edge_data.get("bypass_group")
+                if group:
+                    groups.add(group)
+        for group in groups:
+            for u, v, attrs in g.edges(data=True):
+                if attrs.get("bypass_group") == group:
+                    if u not in blocks and u not in bypass_blocks:
+                        bypass_blocks.append(u)
+                    if v not in blocks and v not in bypass_blocks:
+                        bypass_blocks.append(v)
+    blocks.extend(bypass_blocks)
 
     bleeds = _choose(g, distances, ["bleed", "vent"], 1)
     if not bleeds:
